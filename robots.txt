@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+# We intentionally do NOT list the admin path here. robots.txt is a
+# public file — anything written under Disallow: is a free directory
+# listing for any attacker. The admin gate is protected by:
+#   1. non-guessable filename
+#   2. URL param check
+#   3. Firebase Auth + Firestore role check
+#   4. App Check (recommended)
+# If you ever rename the admin file, the old name still works as a
+# decoy — log the access and ignore.
+
+Sitemap: https://group16-tanta-ati.web.app/sitemap.xml

@@ -1,0 +1,139 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =======================================================================
+    // 🛡️ SECURITY FUNCTIONS (DEFENDER LAYER)
+    // =======================================================================
+
+    // Check if user is logged in
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the authenticated user is an authorized Admin via Role-Based Access Control
+    // This looks for a document in the "admin_roles" collection matching the user's UID.
+    // CRITICAL: the admin_roles collection itself is locked down below — admins cannot
+    // self-promote. Roles are seeded ONLY through the Firebase Console / a Cloud Function.
+    function isAdmin() {
+      return isAuthenticated()
+          && exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid))
+          && get(/databases/$(database)/documents/admin_roles/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // Validation: Ensure the data contains ONLY the permitted fields (No payload injection)
+    function hasOnly(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validation: keys present check (so update operations that omit a field don't fail)
+    function hasKeys(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validation: String Type & Length (Prevents buffer overflow/memory exhaustion attacks)
+    function isValidString(field, minLength, maxLength) {
+      let val = request.resource.data[field];
+      return val is string && val.size() >= minLength && val.size() <= maxLength;
+    }
+
+    // Validation: optional string (may be missing OR empty OR a string of bounded length)
+    function isOptionalString(field, maxLength) {
+      return !request.resource.data.keys().hasAll([field])
+          || request.resource.data[field] == ''
+          || (request.resource.data[field] is string
+              && request.resource.data[field].size() <= maxLength);
+    }
+
+    // Validation: optional list of strings with bounded size
+    function isStringList(field, maxItems, maxItemLength) {
+      return !request.resource.data.keys().hasAll([field])
+          || (request.resource.data[field] is list
+              && request.resource.data[field].size() <= maxItems
+              && request.resource.data[field].every(s => s is string && s.size() <= maxItemLength));
+    }
+
+    // Validation: URL Type & Length (Basic sanitization check)
+    // Only http/https schemes allowed — blocks javascript:, data:, vbscript:, etc.
+    function isValidUrl(field) {
+      let val = request.resource.data[field];
+      return !request.resource.data.keys().hasAll([field])
+          || val == ''
+          || (val is string
+              && val.size() <= 1000
+              && (val.matches('^https://.*') || val.matches('^http://.*')));
+    }
+
+    // ISO-8601 timestamp validation
+    function isIsoDate(field) {
+      return !request.resource.data.keys().hasAll([field])
+          || (request.resource.data[field] is string
+              && request.resource.data[field].size() <= 40
+              && request.resource.data[field].matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*'));
+    }
+
+    // =======================================================================
+    // 🗄️ COLLECTION RULES
+    // =======================================================================
+
+    // 1. ADMIN ROLES (Hidden & Secure Collection)
+    // No one can read or write from the client app.
+    // Add admins ONLY via Firebase Console or a Cloud Function with Admin SDK.
+    // This is the foundation of zero-trust — clients cannot grant themselves admin.
+    match /admin_roles/{userId} {
+      allow read, write: if false;
+    }
+
+    // 2. SETTINGS (Site Config)
+    match /settings/{document=**} {
+      // Anyone can view the site data
+      allow read: if true;
+
+      // Only admins can update the site settings
+      // Strict schema validation to prevent NoSQL Payload Injection
+      allow write: if isAdmin()
+                   && hasOnly(['title', 'heroDescription', 'masterPresentationUrl',
+                               'reportPreviewUrl', 'reportUrl', 'updatedAt'])
+                   && isValidString('title', 1, 100)
+                   && isValidString('heroDescription', 0, 2000)
+                   && isValidUrl('masterPresentationUrl')
+                   && isValidUrl('reportPreviewUrl')
+                   && isValidUrl('reportUrl')
+                   && isIsoDate('updatedAt');
+    }
+
+    // 3. TEAM OPERATIVES
+    match /team/{memberId} {
+      // Anyone can view the team data
+      allow read: if true;
+
+      // Only admins can create/update team members
+      // Strict Schema Enforcement — whitelist fields, validate types & lengths
+      allow write: if isAdmin()
+                   && hasOnly(['name', 'role', 'photoUrl', 'presentationUrl', 'order',
+                               'bio', 'contributions', 'skills', 'createdAt', 'updatedAt'])
+                   && isValidString('name', 2, 100)
+                   && isValidString('role', 2, 100)
+                   && isOptionalString('bio', 800)
+                   && isOptionalString('contributions', 2000)
+                   && isStringList('skills', 30, 60)
+                   && isValidUrl('photoUrl')
+                   && isValidUrl('presentationUrl')
+                   && request.resource.data.order is number
+                   && request.resource.data.order >= 0
+                   && request.resource.data.order <= 999
+                   && isIsoDate('createdAt')
+                   && isIsoDate('updatedAt');
+
+      // Admins can delete members
+      allow delete: if isAdmin();
+    }
+
+    // 4. FALLBACK: Deny everything else (Zero-Trust)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+  }
+}
