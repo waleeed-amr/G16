@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>SYS_ROOT // DASHBOARD</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Use CDN since local vendor files are missing -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js" defer></script>
+
+    <link rel="stylesheet" href="./admin.css">
+
+    <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+
+    <!--
+        Gate check removed since the URL is customized as requested.
+        Real protection comes from Firebase Auth + Firestore.
+    -->
+</head>
+<body>
+    <div class="bg-mesh" aria-hidden="true"></div>
+    <div class="grid-overlay" aria-hidden="true"></div>
+    <div class="orb orb-1" aria-hidden="true"></div>
+    <div class="orb orb-2" aria-hidden="true"></div>
+    <div class="noise-overlay" aria-hidden="true"></div>
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-container" class="login-screen" role="main">
+        <div class="login-card glass-strong">
+            <div class="login-header">
+                <div class="login-icon" aria-hidden="true"><i class="ph-fill ph-fingerprint"></i></div>
+                <h2>BIOMETRIC_AUTH</h2>
+                <p>SYS_ROOT // SECURE GATEWAY</p>
+            </div>
+            <form id="login-form" autocomplete="off" novalidate>
+                <div class="field">
+                    <label for="admin-email"><i class="ph ph-user-circle" aria-hidden="true"></i> SYS_ADMIN</label>
+                    <input type="email" id="admin-email" required placeholder="admin@ati.sec" autocomplete="username">
+                </div>
+                <div class="field">
+                    <label for="admin-password"><i class="ph ph-lock-key" aria-hidden="true"></i> CLEARANCE_CODE</label>
+                    <div class="password-wrap">
+                        <input type="password" id="admin-password" required placeholder="••••••••••" autocomplete="current-password">
+                        <button type="button" class="toggle-pw" id="togglePw" aria-label="إظهار/إخفاء كلمة المرور">
+                            <i class="ph ph-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="ph ph-plugs-connected" aria-hidden="true"></i>
+                    <span>INITIATE_HANDSHAKE</span>
+                </button>
+                <p id="login-error" class="error-text" role="alert" aria-live="assertive"></p>
+            </form>
+            <div class="login-footer">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span>END-TO-END ENCRYPTED</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard-container" class="dashboard" style="display: none;">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar" aria-label="Dashboard navigation">
+            <div class="sidebar-header">
+                <i class="ph-fill ph-shield-check" aria-hidden="true"></i>
+                <span>Admin Panel</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-tab="overview">
+                    <i class="ph ph-squares-four" aria-hidden="true"></i>
+                    <span>نظرة عامة</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="team">
+                    <i class="ph ph-users-three" aria-hidden="true"></i>
+                    <span>أعضاء الفريق</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="posts">
+                    <i class="ph ph-article" aria-hidden="true"></i>
+                    <span>المشاريع والمنشورات</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="settings">
+                    <i class="ph ph-faders" aria-hidden="true"></i>
+                    <span>إعدادات الموقع</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button id="logout-btn" class="btn btn-ghost" type="button" style="width:100%; justify-content:center;">
+                    <i class="ph ph-sign-out" aria-hidden="true"></i>
+                    <span>تسجيل خروج</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN -->
+        <main class="main-content" id="main-content">
+
+            <!-- TOPBAR -->
+            <header class="topbar glass">
+                <div class="topbar-left">
+                    <button class="icon-btn" id="sidebarToggle" type="button" aria-label="Toggle sidebar" aria-expanded="false">
+                        <i class="ph ph-list" aria-hidden="true"></i>
+                    </button>
+                    <div>
+                        <div class="topbar-title" id="topbarTitle">Overview</div>
+                        <div class="topbar-sub" id="topbarSub">System status &amp; quick metrics</div>
+                    </div>
+                </div>
+                <div class="topbar-right">
+                    <button class="icon-btn" id="refreshBtn" type="button" title="Refresh data" aria-label="Refresh data">
+                        <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
+                    </button>
+                    <div class="topbar-status" aria-live="polite">
+                        <span class="status-dot" aria-hidden="true"></span>
+                        <span>ONLINE</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- TAB: OVERVIEW -->
+            <section class="tab-content active" data-tab="overview" aria-labelledby="topbarTitle">
+                <div class="page-header">
+                    <h1>نظرة عامة</h1>
+                    <p>إحصائيات مباشرة للموقع</p>
+                </div>
+
+                <div class="metric-grid">
+                    <div class="metric-card glass" data-reveal>
+                        <div class="metric-icon icon-cyan" aria-hidden="true"><i class="ph-fill ph-users-three"></i></div>
+                        <div class="metric-body">
+                            <div class="metric-num" id="metricTeam">0</div>
+                            <div class="metric-label">Active Operatives</div>
+                        </div>
+                    </div>
+                    <div class="metric-card glass" data-reveal data-reveal-delay="0.05s">
+                        <div class="metric-icon icon-purple" aria-hidden="true"><i class="ph-fill ph-file"></i></div>
+                        <div class="metric-body">
+                            <div class="metric-num" id="metricLinks">0</div>
+                            <div class="metric-label">Files Published</div>
+                        </div>
+                    </div>
+                    <div class="metric-card glass" data-reveal data-reveal-delay="0.1s">
+                        <div class="metric-icon icon-pink" aria-hidden="true"><i class="ph-fill ph-clock"></i></div>
+                        <div class="metric-body">
+                            <div class="metric-num" id="metricUpdated">—</div>
+                            <div class="metric-label">Last Update</div>
+                        </div>
+                    </div>
+                    <div class="metric-card glass" data-reveal data-reveal-delay="0.15s">
+                        <div class="metric-icon icon-green" aria-hidden="true"><i class="ph-fill ph-shield-check"></i></div>
+                        <div class="metric-body">
+                            <div class="metric-num">SECURE</div>
+                            <div class="metric-label">System Status</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overview-grid">
+                    <div class="panel glass" data-reveal>
+                        <div class="panel-header">
+                            <h3><i class="ph ph-chart-line-up" aria-hidden="true"></i> Distribution</h3>
+                        </div>
+                        <div class="panel-body">
+                            <div class="bar-chart" id="distChart" aria-label="Role distribution chart"></div>
+                        </div>
+                    </div>
+                    <div class="panel glass" data-reveal data-reveal-delay="0.1s">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-lightning" aria-hidden="true"></i> Quick Actions</h3>
+                        </div>
+                        <div class="panel-body">
+                            <div class="quick-actions">
+                                <button type="button" class="qa-btn" data-jump="team">
+                                    <i class="ph ph-user-plus" aria-hidden="true"></i>
+                                    <span>Add Operative</span>
+                                </button>
+                                <button type="button" class="qa-btn" data-jump="settings">
+                                    <i class="ph ph-sliders" aria-hidden="true"></i>
+                                    <span>Edit Site</span>
+                                </button>
+                                <a href="index.html" target="_blank" rel="noopener noreferrer" class="qa-btn">
+                                    <i class="ph ph-arrow-square-out" aria-hidden="true"></i>
+                                    <span>View Site</span>
+                                </a>
+                                <button type="button" class="qa-btn" id="qaExport">
+                                    <i class="ph ph-export" aria-hidden="true"></i>
+                                    <span>Export JSON</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: TEAM -->
+            <section class="tab-content" data-tab="team" aria-labelledby="topbarTitle">
+                <div class="page-header">
+                    <h1>إدارة الفريق</h1>
+                    <p>إضافة، تعديل، إزالة أعضاء الفريق</p>
+                </div>
+
+                <div class="team-toolbar">
+                    <div class="search-input">
+                        <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+                        <label for="adminSearch" class="visually-hidden">ابحث في الفريق</label>
+                        <input type="text" id="adminSearch" placeholder="ابحث في الفريق..." autocomplete="off">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="addMemberBtn">
+                        <i class="ph ph-user-plus" aria-hidden="true"></i>
+                        <span>Add New Operative</span>
+                    </button>
+                </div>
+
+                <div class="team-list" id="adminTeamList" aria-live="polite" aria-busy="true">
+                    <div class="empty-state" role="status">
+                        <i class="ph ph-spinner-gap ph-spin" aria-hidden="true"></i>
+                        <span>Loading operatives...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: SETTINGS -->
+            <section class="tab-content" data-tab="settings" aria-labelledby="topbarTitle">
+                <div class="page-header">
+                    <h1>Site Configuration</h1>
+                    <p>Edit the content displayed on the public site</p>
+                </div>
+
+                <div class="panel glass">
+                    <div class="panel-header">
+                        <h3><i class="ph ph-faders" aria-hidden="true"></i> General Settings</h3>
+                    </div>
+                    <div class="panel-body">
+                        <form id="settings-form" novalidate>
+                            <div class="form-grid">
+                                <div class="field full">
+                                    <label for="site-title">Site Title</label>
+                                    <input type="text" id="site-title" placeholder="مشروع تخرج ATI" maxlength="100" required>
+                                </div>
+                                <div class="field full">
+                                    <label for="site-desc">Hero Description</label>
+                                    <textarea id="site-desc" rows="3" placeholder="Describe the mission..." maxlength="2000"></textarea>
+                                </div>
+                                <div class="field full">
+                                    <label for="site-master-url">Master Presentation URL</label>
+                                    <input type="url" id="site-master-url" placeholder="https://..." maxlength="1000">
+                                </div>
+                                <div class="field">
+                                    <label for="site-preview-url">Report Preview URL</label>
+                                    <input type="url" id="site-preview-url" placeholder="https://..." maxlength="1000">
+                                </div>
+                                <div class="field">
+                                    <label for="site-download-url">Report Download URL</label>
+                                    <input type="url" id="site-download-url" placeholder="https://..." maxlength="1000">
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="ph ph-floppy-disk" aria-hidden="true"></i>
+                                    <span>Update Config</span>
+                                </button>
+                                <button type="button" class="btn btn-ghost" id="resetSettings">
+                    <h1>إعدادات الموقع</h1>
+                    <p>إعدادات النظام العامة</p>
+                </div>
+                <div class="preview-frame-wrap glass">
+                    <div class="preview-bar">
+                        <div class="dots" aria-hidden="true">
+                            <span class="dot red"></span>
+                            <span class="dot yellow"></span>
+                            <span class="dot green"></span>
+                        </div>
+                        <div class="preview-url">index.html</div>
+                        <a href="index.html" target="_blank" rel="noopener noreferrer" class="icon-btn" title="Open in new tab" aria-label="Open site in new tab">
+                            <i class="ph ph-arrow-square-out" aria-hidden="true"></i>
+                        </a>
+                    </div>
+                    <iframe src="index.html" class="preview-iframe" id="previewFrame" title="Live preview of public site" sandbox="allow-scripts allow-same-origin"></iframe>
+                </div>
+            </section>
+
+            </section>
+        </main>
+    </div>
+
+    <!-- MEMBER EDITOR MODAL -->
+    <div class="modal-backdrop" id="memberEditor" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="editorTitle" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 id="editorTitle">إضافة عضو</h2>
+                <button class="modal-close" type="button" data-close-editor aria-label="Close">
+                    <i class="ph ph-x" aria-hidden="true"></i>
+                </button>
+            </div>
+            <form id="memberForm" class="modal-body" novalidate>
+                <input type="hidden" id="member-id">
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="member-name">Name *</label>
+                        <input type="text" id="member-name" required minlength="2" maxlength="100">
+                    </div>
+                    <div class="field">
+                        <label for="member-role">Role *</label>
+                        <input type="text" id="member-role" required minlength="2" maxlength="100">
+                    </div>
+                    <div class="field full">
+                        <label>Photo</label>
+                        <div class="upload-row">
+                            <div class="upload-preview" id="uploadPreview" aria-hidden="true">
+                                <i class="ph ph-image"></i>
+                            </div>
+                            <div class="upload-controls">
+                                <input type="file" id="member-photo-file" accept="image/png,image/jpeg,image/webp,image/gif">
+                                <label for="member-photo-url" class="visually-hidden">Photo URL</label>
+                                <input type="url" id="member-photo-url" placeholder="...or paste URL" maxlength="1000">
+                                <button type="button" class="btn btn-ghost" id="clearPhoto">
+                                    <i class="ph ph-trash" aria-hidden="true"></i> Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="member-pres">Presentation URL</label>
+                        <input type="url" id="member-pres" maxlength="1000">
+                    </div>
+                    <div class="field">
+                        <label for="member-order">Sort Order</label>
+                        <input type="number" id="member-order" value="99" min="0" max="999">
+                    </div>
+                    <div class="field full">
+                        <label for="member-bio">Bio</label>
+                        <textarea id="member-bio" rows="2" placeholder="Short biography..." maxlength="800"></textarea>
+                    </div>
+                    <div class="field full">
+                        <label for="member-skills">Skills <span class="hint">(comma separated, max 30)</span></label>
+                        <input type="text" id="member-skills" placeholder="Penetration Testing, Network Security, ..." maxlength="1900">
+                    </div>
+                    <div class="field full">
+                        <label for="member-contributions">Contributions</label>
+                        <textarea id="member-contributions" rows="2" placeholder="What did this operative work on?" maxlength="2000"></textarea>
+                    </div>
+                </div>
+                        <label for="member-order">Order</label>
+                        <input type="number" id="member-order" min="0" max="999" value="0">
+                        <span class="help-text">0 is first</span>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <span id="editor-status" class="status-msg" role="status" aria-live="polite"></span>
+                    <button type="button" class="btn btn-ghost" data-close-editor>إلغاء</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ph ph-check" aria-hidden="true"></i> حفظ العضو
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- POST EDITOR MODAL -->
+    <div class="modal-backdrop" id="postEditor" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="postEditorTitle" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 id="postEditorTitle">إضافة منشور</h2>
+                <button class="modal-close" type="button" id="closePostEditor" aria-label="Close">
+                    <i class="ph ph-x" aria-hidden="true"></i>
+                </button>
+            </div>
+            <form id="postForm" class="modal-body" novalidate>
+                <input type="hidden" id="post-id">
+                
+                <div class="form-group">
+                    <label for="post-title">العنوان *</label>
+                    <input type="text" id="post-title" required minlength="2" maxlength="200" placeholder="مثال: التصميم النهائي للمشروع">
+                </div>
+                
+                <div class="form-group">
+                    <label for="post-desc">الوصف</label>
+                    <textarea id="post-desc" rows="4" maxlength="2000" placeholder="تفاصيل المشروع..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>صورة المشروع</label>
+                    <div class="photo-upload-wrap">
+                        <div class="photo-preview" id="postUploadPreview" aria-hidden="true">
+                            <i class="ph ph-image"></i>
+                        </div>
+                        <div class="upload-controls">
+                            <input type="file" id="post-photo-file" accept="image/png,image/jpeg,image/webp,image/gif">
+                            <input type="url" id="post-photo-url" placeholder="أو ضع رابط الصورة هنا" maxlength="1000">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label for="post-author-type">صاحب العمل</label>
+                        <select id="post-author-type">
+                            <option value="team">الفريق بأكمله</option>
+                            <option value="member">عضو محدد</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="post-member-select-group" style="display:none;">
+                        <label for="post-author-id">اختر العضو</label>
+                        <select id="post-author-id">
+                            <!-- Populated via JS -->
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label for="post-link">رابط خارجي (للعرض/التحميل)</label>
+                        <input type="url" id="post-link" maxlength="1000" placeholder="https://...">
+                    </div>
+                    <div class="form-group">
+                        <label for="post-order">الترتيب</label>
+                        <input type="number" id="post-order" min="0" max="999" value="0">
+                        <span class="help-text">الأقل يظهر أولاً</span>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <span id="post-editor-status" class="status-msg" role="status" aria-live="polite"></span>
+                    <button type="button" class="btn btn-ghost" id="cancelPostEditor">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ph ph-check" aria-hidden="true"></i> حفظ المنشور
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TOASTS -->
+    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Load our App Scripts -->
+    <script src="./firebase-config.js"></script>
+    <script type="module" src="./admin.js"></script>
+</body>
+</html>
