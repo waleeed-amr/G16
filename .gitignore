@@ -1,0 +1,27 @@
+# Firebase Admin SDK private key — NEVER commit this.
+# Used by bootstrap-admin.cjs to add a UID to admin_roles.
+# Get it from: Firebase Console → Project Settings → Service Accounts
+service-account.json
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build / cache
+dist/
+.cache/
+*.log
+.env
+.env.local
