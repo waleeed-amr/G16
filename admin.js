@@ -129,7 +129,7 @@ const loginThrottle = _makeLoginThrottle(6, 5 * 60 * 1000);
 onAuthStateChanged(auth, (user) => {
     if (user) {
         if (loginContainer) loginContainer.style.display = 'none';
-        if (dashboardContainer) dashboardContainer.style.display = 'grid';
+        if (dashboardContainer) dashboardContainer.style.display = 'flex';
         if (adminEmailEl) adminEmailEl.textContent = user.email || '—';
         initDashboard();
     } else {
