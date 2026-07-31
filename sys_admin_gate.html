@@ -14,7 +14,10 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js" defer></script>
 
-    <link rel="stylesheet" href="styles/admin.css">
+    <link rel="stylesheet" href="./admin.css">
+
+    <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 
     <!--
         Gate check. The filename itself is the first secret; the query param
@@ -457,6 +460,8 @@
     <!-- TOASTS -->
     <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
-    <script type="module" src="./js/admin.js"></script>
+    <!-- Load our App Scripts -->
+    <script src="./firebase-config.js"></script>
+    <script src="./admin.js"></script>
 </body>
 </html>
