@@ -2,10 +2,10 @@
 //   NTI SECURE — Admin Dashboard Logic v2.0
 //   Firebase Storage · Activity Log · Charts · Backup/Restore
 // ==========================================================
-// ?v=3 forces the browser to bypass the HTTP cache and refetch. Critical:
+// ?v=4 forces the browser to bypass the HTTP cache and refetch. Critical:
 // if your browser is serving a stale admin.js that calls initSettingsForm(),
 // that's the cause of the ReferenceError you're seeing in the console.
-import { app, db, auth, storage } from './firebase-config.js?v=3';
+import { app, db, auth, storage } from './firebase-config.js?v=4';
 import {
     signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
@@ -389,7 +389,23 @@ function initTabs() {
 
     document.querySelectorAll('[data-jump]').forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelector('.nav-item[data-tab="' + btn.dataset.jump + '"]')?.click();
+            const target = btn.dataset.jump;
+            const navItem = document.querySelector(`.nav-item[data-tab="${target}"]`);
+            if (navItem) navItem.click();
+            // After switching to the target tab, also open the relevant editor
+            // for "team" / "posts" — much better UX than a two-step click.
+            // Using rAF ensures the tab has actually become visible first.
+            if (target === 'team') {
+                requestAnimationFrame(() => {
+                    try { openEditor(); }
+                    catch (err) { console.error('[quick-action] openEditor failed:', err); toast('فشل فتح النموذج: ' + err.message, 'error'); }
+                });
+            } else if (target === 'posts') {
+                requestAnimationFrame(() => {
+                    try { openPostEditor(); }
+                    catch (err) { console.error('[quick-action] openPostEditor failed:', err); toast('فشل فتح النموذج: ' + err.message, 'error'); }
+                });
+            }
         });
     });
 
@@ -639,7 +655,17 @@ const editor = document.getElementById('memberEditor');
 const editorTitle = document.getElementById('editorTitle');
 
 function openEditor(id) {
-    if (!memberForm || !editor) return;
+    // Defensive: if the modal isn't in the DOM (e.g. partial load), tell
+    // the user instead of failing silently. This was the #1 cause of
+    // "the add-member button does nothing" reports.
+    if (!memberForm || !editor) {
+        const missing = [];
+        if (!memberForm) missing.push('memberForm');
+        if (!editor) missing.push('memberEditor');
+        console.error('[openEditor] missing DOM nodes:', missing.join(', '));
+        toast('نموذج إضافة عضو غير جاهز (' + missing.join(', ') + ') — حدّث الصفحة', 'error', 6000);
+        return;
+    }
     memberForm.reset();
     document.getElementById('member-id').value = '';
     const preview = document.getElementById('uploadPreview');
@@ -648,7 +674,10 @@ function openEditor(id) {
 
     if (id) {
         const m = state.team.find(x => x.id === id);
-        if (!m) return;
+        if (!m) {
+            console.warn('[openEditor] no member with id', id);
+            return;
+        }
         editorTitle.textContent = 'تعديل العضو';
         document.getElementById('member-id').value = m.id;
         document.getElementById('member-name').value = m.name || '';
@@ -667,6 +696,8 @@ function openEditor(id) {
     }
     editor.style.display = 'flex';
     editor.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    console.log('[openEditor] member editor opened, id=', id || '(new)');
 }
 
 function closeEditor() {
@@ -681,7 +712,29 @@ if (editor) {
     editor.addEventListener('click', (e) => { if (e.target === editor) closeEditor(); });
 }
 
-document.getElementById('addMemberBtn')?.addEventListener('click', () => openEditor());
+// "إضافة عضو جديد" — the main CTA on the team tab. Use event delegation so
+// even if the script re-runs (e.g. after the defensive init was forced to
+// re-attach listeners), the click still triggers openEditor. We also add
+// a clear error message if the modal can't be opened for any reason.
+const _addMemberBtn = document.getElementById('addMemberBtn');
+if (_addMemberBtn) {
+    _addMemberBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        try {
+            if (!document.getElementById('memberEditor')) {
+                toast('خطأ: نموذج العضو مش موجود في الصفحة', 'error', 5000);
+                console.error('[addMemberBtn] #memberEditor not found in DOM');
+                return;
+            }
+            openEditor();
+        } catch (err) {
+            console.error('[addMemberBtn] openEditor failed:', err);
+            toast('فشل فتح النموذج: ' + (err?.message || err), 'error', 5000);
+        }
+    });
+} else {
+    console.warn('[addMemberBtn] not found at module load — will rely on the team-tab re-render to attach it.');
+}
 
 // Photo upload preview (local only until save)
 document.getElementById('member-photo-file')?.addEventListener('change', (e) => {
@@ -1471,7 +1524,7 @@ document.getElementById('shortcutsBtn')?.addEventListener('click', showShortcuts
 // ============================================================
 //   FORCE UPDATE — nuke the service worker + cache and reload.
 //
-// Why: even with ?v=3 in the SW URL, some browsers (especially when the
+// Why: even with ?v=4 in the SW URL, some browsers (especially when the
 // page is opened in DevTools "Disable cache" OFF, or behind a corporate
 // proxy) serve the OLD sw.js from the HTTP cache. The OLD sw.js then
 // installs CACHE_NAME v2 and serves the OLD admin.js. This button is the

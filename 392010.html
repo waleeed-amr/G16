@@ -498,15 +498,15 @@
     <!-- TOASTS -->
     <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
-    <script type="module" src="./admin.js?v=3"></script>
+    <script type="module" src="./admin.js?v=4"></script>
     <script>
         // Register service worker on the admin page too — see note in index.html.
-        // The ?v=3 query string is critical: without it the browser serves the
+        // The ?v=4 query string is critical: without it the browser serves the
         // old sw.js from its HTTP cache, the old sw.js installs CACHE_NAME v2,
         // and the user is stuck on the broken admin.js forever.
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js?v=3')
+                navigator.serviceWorker.register('./sw.js?v=4')
                     .then(reg => {
                         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
                         reg.addEventListener('updatefound', () => {

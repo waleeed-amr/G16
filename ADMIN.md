@@ -40,7 +40,7 @@
 
 ## Deploy الـ Firestore Rules
 
-في كل مرة تعدّل `firestore.rules` لازم تعمله deploy:
+في كل مرة تعدّل `firestore.rules` لازم تعمله deploy على Firebase:
 
 ### من Firebase Console
 - **Firestore** → **Rules** tab → الصق المحتوى → **Publish**
@@ -52,6 +52,26 @@ firebase login
 firebase use group-a0ee4
 firebase deploy --only firestore:rules
 ```
+
+## ⚠️ Demo Mode (مؤقت للتسليم)
+
+للتسليم السريع، الـ `firestore.rules` الحالية **فضفاضة جداً**: أي مستخدم مسجّل دخوله يقدر يقرأ ويكتب كل حاجة. ده **مش آمن للإنتاج** لكنه مناسب للـ demo.
+
+**لاسترجاع الـ rules الأصلية (الآمنة) بعد التسليم:**
+
+```powershell
+# 1) اقرأ النسخة المحفوظة
+Get-Content firestore.rules.strict
+
+# 2) الصقها في Firebase Console → Firestore → Rules → Publish
+#    أو شغّل:
+firebase deploy --only firestore:rules --file firestore.rules.strict
+```
+
+الـ `firestore.rules.strict` فيها:
+- `isAdmin()` بيشترط وجود UID في `admin_roles`
+- الـ public يقدر يقرأ فقط
+- كل write محتاج `isAdmin()`
 
 ## Cache & Updates
 

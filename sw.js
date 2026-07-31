@@ -1,8 +1,7 @@
-// CACHE bumped to v3 — this forces the service worker to drop every old
-// cached file (admin.js v2 had a stale bug that called initSettingsForm()
-// inside initDashboard; if your browser is still serving the old file,
-// hard-refresh once or bump this again).
-const CACHE_NAME = 'g16-nti-v3';
+// CACHE bumped to v4 — looser rules, fixes add-member button, opens quick-
+// action modals directly. If your browser is still on v2, hit the broom
+// icon in the topbar (or Application → Service Workers → Unregister) and reload.
+const CACHE_NAME = 'g16-nti-v4';
 const STATIC_ASSETS = [
   './',
   './index.html',

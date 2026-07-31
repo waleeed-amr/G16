@@ -1,0 +1,60 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------
+    // Helper Functions
+    // ---------------------------------------------------------
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/admin_roles/$(request.auth.uid));
+    }
+
+    function isValidString(text, min, max) {
+      return text is string && text.size() >= min && text.size() <= max;
+    }
+
+    // ---------------------------------------------------------
+    // Collections
+    // ---------------------------------------------------------
+
+    // Admin Roles collection (Strictly controlled)
+    match /admin_roles/{uid} {
+      allow read: if isAuthenticated() && request.auth.uid == uid;
+      allow write: if false; // Only manageable via Firebase Console or Admin SDK
+    }
+
+    // Site Settings (Public read, Admin write)
+    match /settings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Team Members (Public read, Admin manage)
+    match /team/{memberId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Posts & Projects (Public read, Admin manage)
+    match /posts/{postId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Activity Log (Admin only — both read and write)
+    // Public visitors don't need to see who logged in / what was edited.
+    match /activity/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Default deny all for any other unknown collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
