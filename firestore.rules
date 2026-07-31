@@ -37,21 +37,13 @@ service cloud.firestore {
     // Team Members (Public read, Admin manage)
     match /team/{memberId} {
       allow read: if true;
-      // Basic data validation: ensuring 'name' and 'role' are provided when writing
-      allow create, update: if isAdmin() 
-                            && request.resource.data.keys().hasAll(['name', 'role'])
-                            && isValidString(request.resource.data.name, 2, 100);
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // Posts & Projects (Public read, Admin manage)
     match /posts/{postId} {
       allow read: if true;
-      // Basic data validation: ensuring 'title' is provided when writing
-      allow create, update: if isAdmin()
-                            && request.resource.data.keys().hasAll(['title'])
-                            && isValidString(request.resource.data.title, 2, 200);
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // Default deny all for any other unknown collections

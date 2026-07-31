@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 /* ==========================================================
    NTI SECURE — Admin Dashboard
@@ -59,11 +59,29 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; font-size: 15px; }
 
+@keyframes floatGlow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+@keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulseGlow {
+    0% { box-shadow: 0 0 15px rgba(0, 242, 254, 0.2); }
+    50% { box-shadow: 0 0 25px rgba(0, 242, 254, 0.5); }
+    100% { box-shadow: 0 0 15px rgba(0, 242, 254, 0.2); }
+}
+
 body {
     background: var(--bg-base);
     background-image: 
-        radial-gradient(circle at 15% 50%, rgba(0, 242, 254, 0.04) 0%, transparent 50%),
-        radial-gradient(circle at 85% 30%, rgba(176, 38, 255, 0.04) 0%, transparent 50%);
+        radial-gradient(circle at 15% 50%, rgba(0, 242, 254, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 30%, rgba(176, 38, 255, 0.08) 0%, transparent 40%),
+        linear-gradient(45deg, rgba(6,7,10,1) 0%, rgba(16,18,27,1) 100%);
+    background-size: 200% 200%;
+    animation: floatGlow 15s ease infinite;
     background-attachment: fixed;
     color: var(--text-main);
     font-family: var(--font-ui);
@@ -89,6 +107,12 @@ body {
     border: 1px solid var(--border-light);
     box-shadow: var(--shadow-sm);
     border-radius: var(--r-md);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.panel:hover, .metric-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md), var(--shadow-glow);
+    border-color: rgba(255,255,255,0.1);
 }
 
 /* ----------------------------------------------------------
@@ -156,10 +180,11 @@ input:focus, textarea:focus, select:focus {
 .btn-primary { 
     background: linear-gradient(135deg, var(--primary), #0098ff); 
     color: #000; box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3); 
+    background-size: 200% auto;
 }
 .btn-primary:hover { 
-    transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 242, 254, 0.4); 
-    filter: brightness(1.1);
+    transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 242, 254, 0.6); 
+    background-position: right center;
 }
 .btn-secondary { background: var(--secondary); color: var(--text-main); border: 1px solid var(--border-light); }
 .btn-secondary:hover { background: var(--secondary-hover); border-color: rgba(255,255,255,0.2); }

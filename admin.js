@@ -13,6 +13,28 @@
 //     and / or a Cloud Function rate limiter).
 // ==========================================================
 import { app, db, auth, storage } from './firebase-config.js';
+
+// --- ADVANCED UTILS (Network Resilience & Perf) ---
+const withRetry = async (fn, retries = 3, delay = 1500) => {
+    for (let i = 0; i < retries; i++) {
+        try { return await fn(); } 
+        catch (err) {
+            if (i === retries - 1) throw err;
+            console.warn([Network] Retry \/\ after \ms..., err.message);
+            await new Promise(r => setTimeout(r, delay));
+            delay *= 1.5; // Exponential backoff
+        }
+    }
+};
+
+const debounce = (fn, delay = 300) => {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn(...args), delay);
+    };
+};
+// --------------------------------------------------
 import {
     signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
@@ -306,7 +328,7 @@ function initReveal() {
 }
 
 async function loadSettings() {
-    const snap = await getDoc(doc(db, 'settings', 'site'));
+    const snap = await withRetry(() => getDoc(doc(db, 'settings', 'site')));
     if (snap.exists()) {
         state.settings = snap.data();
         $('site-title').value = state.settings.title || '';
@@ -320,7 +342,7 @@ async function loadSettings() {
 }
 
 async function loadTeam() {
-    const snap = await getDocs(query(collection(db, 'team'), orderBy('order', 'asc')));
+    const snap = await withRetry(() => getDocs(query(collection(db, 'team')), orderBy('order', 'asc')));
     state.team = [];
     snap.forEach(d => state.team.push({ id: d.id, ...d.data() }));
     const badge = $('teamBadge');
@@ -328,7 +350,7 @@ async function loadTeam() {
 }
 
 async function loadPosts() {
-    const snap = await getDocs(query(collection(db, 'posts'), orderBy('order', 'asc')));
+    const snap = await withRetry(() => getDocs(query(collection(db, 'posts')), orderBy('order', 'asc')));
     state.posts = [];
     snap.forEach(d => state.posts.push({ id: d.id, ...d.data() }));
 }
@@ -752,12 +774,12 @@ if (memberForm) {
             };
 
             if (id) {
-                await updateDoc(doc(db, 'team', id), data);
+                await withRetry(() => updateDoc(doc(db, 'team', id)), data);
                 logActivity('edit', 'Updated operative: ' + data.name);
                 toast('Operative updated', 'success');
             } else {
                 data.createdAt = new Date().toISOString();
-                await addDoc(collection(db, 'team'), data);
+                await withRetry(() => addDoc(collection(db, 'team')), data);
                 logActivity('add', 'Added new operative: ' + data.name);
                 toast('Operative added', 'success');
             }
@@ -785,7 +807,7 @@ async function deleteMember(id) {
     if (!m) return;
     if (!confirm('Delete "' + (m.name || 'this member') + '"? This cannot be undone.')) return;
     try {
-        await deleteDoc(doc(db, 'team', id));
+        await withRetry(() => deleteDoc(doc(db, 'team', id)));
         // Best-effort: delete the file from Firebase Storage if it's in our bucket
         if (m.photoUrl && m.photoUrl.indexOf('firebasestorage') !== -1) {
             try { await deleteObject(ref(storage, m.photoUrl)); } catch (_) { /* ignore */ }
@@ -1132,12 +1154,12 @@ if ($('postForm')) {
             if (stat) stat.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u062d\u0641\u0638...';
             btn.disabled = true;
             if (id) {
-                await updateDoc(doc(db, 'posts', id), payload);
+                await withRetry(() => updateDoc(doc(db, 'posts', id)), payload);
                 toast('\u062a\u0645 \u0627\u0644\u062a\u0639\u062f\u064a\u0644 \u0628\u0646\u062c\u0627\u062d', 'success');
                 logActivity('edit', `Updated post: ${title}`);
             } else {
                 payload.createdAt = new Date().toISOString();
-                await addDoc(collection(db, 'posts'), payload);
+                await withRetry(() => addDoc(collection(db, 'posts')), payload);
                 toast('\u062a\u0645\u062a \u0627\u0644\u0625\u0636\u0627\u0641\u0629 \u0628\u0646\u062c\u0627\u062d', 'success');
                 logActivity('add', `Created post: ${title}`);
             }
@@ -1156,7 +1178,7 @@ if ($('postForm')) {
 async function deletePost(id, title) {
     if (!confirm('\u0647\u0644 \u0623\u0646\u062a \u0645\u062a\u0623\u0643\u062f \u0645\u0646 \u062d\u0630\u0641 \u0627\u0644\u0645\u0646\u0634\u0648\u0631 "' + title + '"\u061f \u0644\u0627 \u064a\u0645\u0643\u0646 \u0627\u0644\u062a\u0631\u0627\u062c\u0639 \u0639\u0646 \u0647\u0630\u0627.')) return;
     try {
-        await deleteDoc(doc(db, 'posts', id));
+        await withRetry(() => deleteDoc(doc(db, 'posts', id)));
         toast('\u062a\u0645 \u0627\u0644\u062d\u0630\u0641', 'success');
         logActivity('delete', `Deleted post: ${title}`);
         await loadPosts();

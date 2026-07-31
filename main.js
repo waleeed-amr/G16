@@ -5,6 +5,28 @@
 //   No innerHTML interpolation of untrusted strings.
 // ==========================================================
 import { db } from './firebase-config.js';
+
+// --- ADVANCED UTILS (Network Resilience & Perf) ---
+const withRetry = async (fn, retries = 3, delay = 1500) => {
+    for (let i = 0; i < retries; i++) {
+        try { return await fn(); } 
+        catch (err) {
+            if (i === retries - 1) throw err;
+            console.warn([Network] Retry \/\ after \ms..., err.message);
+            await new Promise(r => setTimeout(r, delay));
+            delay *= 1.5; // Exponential backoff
+        }
+    }
+};
+
+const debounce = (fn, delay = 300) => {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn(...args), delay);
+    };
+};
+// --------------------------------------------------
 import {
     doc, getDoc, collection, getDocs, query, orderBy
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
@@ -204,7 +226,7 @@ async function loadSiteData() {
     const teamGrid = document.getElementById('team-grid');
 
     try {
-        const settingsSnap = await getDoc(doc(db, "settings", "site"));
+        const settingsSnap = await withRetry(() => getDoc(doc(db, "settings", "site")));
         if (settingsSnap.exists()) {
             const data = settingsSnap.data();
             const title = data.title || 'مشروع تخرج NTI';
@@ -234,11 +256,11 @@ async function loadSiteData() {
             if (heroDesc) heroDesc.textContent = 'يرجى ضبط إعدادات الموقع من لوحة التحكم.';
         }
 
-        const teamSnap = await getDocs(query(collection(db, "team"), orderBy("order", "asc")));
+        const teamSnap = await withRetry(() => getDocs(query(collection(db, "team")), orderBy("order", "asc")));
         state.team = [];
         teamSnap.forEach(d => state.team.push({ id: d.id, type: 'team', ...d.data() }));
 
-        const postsSnap = await getDocs(query(collection(db, "posts"), orderBy("order", "asc")));
+        const postsSnap = await withRetry(() => getDocs(query(collection(db, "posts")), orderBy("order", "asc")));
         state.posts = [];
         postsSnap.forEach(d => state.posts.push({ id: d.id, type: 'post', ...d.data() }));
 
