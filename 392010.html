@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
+    <!-- Cache-busting: same as index.html — see comment there. -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>SYS_ROOT // DASHBOARD v2.0</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -489,5 +493,32 @@
     <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
     <script type="module" src="./admin.js"></script>
+    <script>
+        // Register service worker on the admin page too — this is what guarantees
+        // the latest admin.js is loaded even when the user lands on /392010.html
+        // directly (bypassing index.html). Without this, a stale admin.js
+        // version can be served from the HTTP cache and crash initDashboard.
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => {
+                        // If a new SW is already waiting, tell it to take over NOW.
+                        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        reg.addEventListener('updatefound', () => {
+                            const sw = reg.installing;
+                            if (!sw) return;
+                            sw.addEventListener('statechange', () => {
+                                if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New version available — force-activate.
+                                    sw.postMessage({ type: 'SKIP_WAITING' });
+                                }
+                            });
+                        });
+                        console.log('SW registered (admin):', reg.scope);
+                    })
+                    .catch(err => console.log('SW registration failed:', err));
+            });
+        }
+    </script>
 </body>
 </html>

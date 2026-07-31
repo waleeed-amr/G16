@@ -3,6 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Cache-busting: force the browser to validate every load. This is
+         belt-and-suspenders next to the service-worker CACHE_NAME bump in
+         sw.js — if either layer serves stale code, the other catches it. -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta name="description" content="group 16 tanta NTI - The ultimate cybersecurity graduation project platform for Group 16, Tanta University NTI. Advanced penetration testing and security research.">
     <meta name="keywords" content="group 16 tanta NTI, cybersecurity, graduation project, tanta university, NTI, cyber security group 16, penetration testing">
     <meta name="author" content="Group 16 Tanta NTI">
@@ -285,7 +291,20 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW registered:', reg.scope))
+                    .then(reg => {
+                        // If a new SW is already waiting, tell it to take over NOW.
+                        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        reg.addEventListener('updatefound', () => {
+                            const sw = reg.installing;
+                            if (!sw) return;
+                            sw.addEventListener('statechange', () => {
+                                if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+                                    sw.postMessage({ type: 'SKIP_WAITING' });
+                                }
+                            });
+                        });
+                        console.log('SW registered:', reg.scope);
+                    })
                     .catch(err => console.log('SW registration failed:', err));
             });
         }

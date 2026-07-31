@@ -131,18 +131,33 @@ function toast(msg, type = 'info', duration = 3500, action = null) {
 // --- ACTIVITY LOG (Firestore) ---
 // Returns a Promise that resolves to true on success, false on failure.
 // NEVER throws — activity logging is a side effect; failures must not break
-// the main user action.
+// the main user action. We only show a toast on the FIRST failure (per page
+// load) so we don't spam the user.
+let _activityLogWarned = false;
 async function logActivity(type, title, details = '') {
     try {
         await addDoc(collection(db, 'activity'), {
             type, title, details,
             userEmail: auth.currentUser?.email || 'unknown',
+            userUid: auth.currentUser?.uid || 'unknown',
             timestamp: new Date().toISOString(),
             createdAt: Date.now()
         });
         return true;
     } catch (e) {
         console.warn('[logActivity] failed:', e?.code, e?.message);
+        // Surface a one-time hint so the admin knows what to fix.
+        // Common cause: their UID is missing from the admin_roles collection.
+        if (!_activityLogWarned && e?.code === 'permission-denied') {
+            _activityLogWarned = true;
+            const uid = auth.currentUser?.uid;
+            toast(
+                'سجل النشاط لا يعمل: صلاحيات مرفوضة. ' +
+                'أضف الـ UID التالي في مجموعة admin_roles: ' + (uid || '?'),
+                'error', 10000
+            );
+            console.info('[logActivity] To fix: create a doc in admin_roles with id =', uid);
+        }
         return false;
     }
 }
@@ -191,6 +206,27 @@ if (loginForm) {
 const logoutBtn = document.getElementById('logout-btn');
 if (logoutBtn) logoutBtn.addEventListener('click', () => signOut(auth));
 
+// Click the admin email in the topbar to copy the UID + show where to register it.
+// This is the #1 fix for "permission-denied" errors — admins need their UID
+// in the admin_roles collection (one doc per admin, doc id = uid).
+const adminEmailEl = document.getElementById('adminEmail');
+if (adminEmailEl) {
+    adminEmailEl.title = 'اضغط لعرض ونسخ الـ UID (لازم يكون في admin_roles)';
+    adminEmailEl.style.cursor = 'help';
+    adminEmailEl.addEventListener('click', async () => {
+        const u = auth.currentUser;
+        if (!u) return;
+        const text = `Email: ${u.email}\nUID: ${u.uid}\n\nأضف doc في admin_roles بالـ UID ده كـ document ID.`;
+        try {
+            await navigator.clipboard.writeText(u.uid);
+            toast('تم نسخ الـ UID: ' + u.uid, 'success', 5000);
+            console.info(text);
+        } catch (_) {
+            prompt('انسخ الـ UID ده (document ID في admin_roles):', u.uid);
+        }
+    });
+}
+
 const togglePw = document.getElementById('togglePw');
 if (togglePw) {
     togglePw.addEventListener('click', () => {
@@ -207,13 +243,32 @@ if (togglePw) {
 // (settings form, member editor, post editor, backup/restore). The dashboard
 // only needs to kick off the tabs, sidebar, real-time listeners, and the
 // initial settings load + login activity.
+//
+// Every step is wrapped in try/catch so a single failure can't take down
+// the whole UI. This is critical: if one boot step throws, the user would
+// otherwise lose the tabs, sidebar toggle, and the quick-action buttons.
 function initDashboard() {
-    initTabs();
-    initSidebar();
-    initRealtimeListeners();
-    // Fire-and-forget: don't let activity-log failure block dashboard boot.
-    logActivity('settings', 'Admin logged in').catch(err => {
-        console.warn('[initDashboard] activity log skipped:', err?.message || err);
+    const _safe = (name, fn) => {
+        try { fn(); }
+        catch (err) {
+            console.error('[initDashboard] ' + name + ' failed:', err);
+            toast('تعذّر تهيئة "' + name + '" — ' + (err?.message || err), 'error', 5000);
+        }
+    };
+
+    // Tab + sidebar wiring is what powers the "quick action" buttons
+    // (data-jump) — must come first so a later failure doesn't block them.
+    _safe('tabs', initTabs);
+    _safe('sidebar', initSidebar);
+    _safe('realtime-listeners', initRealtimeListeners);
+
+    // Activity log is a side effect — logActivity already swallows errors,
+    // but if the user isn't an admin (no UID in admin_roles) the write will
+    // fail with permission-denied. We surface a friendly hint, then move on.
+    logActivity('settings', 'Admin logged in').then(ok => {
+        if (!ok) {
+            console.warn('[initDashboard] activity log skipped (likely no admin role for current UID)');
+        }
     });
 }
 

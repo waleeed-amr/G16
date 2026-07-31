@@ -1,4 +1,8 @@
-const CACHE_NAME = 'g16-nti-v2';
+// CACHE bumped to v3 — this forces the service worker to drop every old
+// cached file (admin.js v2 had a stale bug that called initSettingsForm()
+// inside initDashboard; if your browser is still serving the old file,
+// hard-refresh once or bump this again).
+const CACHE_NAME = 'g16-nti-v3';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -7,33 +11,55 @@ const STATIC_ASSETS = [
   './firebase-config.js',
   './392010.html',
   './admin.css',
-  './admin.js'
+  './admin.js',
+  './firestore.rules',
+  './manifest.json'
 ];
 
-// Install: Cache static assets
+// Install: Cache static assets (best-effort; don't block on optional files)
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    }).catch(() => {
-      // Silent fail for optional assets
+      return Promise.all(
+        STATIC_ASSETS.map((url) =>
+          cache.add(new Request(url, { cache: 'reload' })).catch((err) => {
+            console.warn('[sw] failed to cache', url, err?.message || err);
+          })
+        )
+      );
     })
   );
+  // Force-activate: the new SW takes over open tabs without waiting
+  // for them to be closed. This is the key to busting the stale cache.
   self.skipWaiting();
 });
 
-// Activate: Clean old caches
+// Activate: Clean old caches and take control of all open tabs
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
           .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
+          .map((name) => {
+            console.log('[sw] deleting old cache:', name);
+            return caches.delete(name);
+          })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
+});
+
+// Listen for messages from the page (used to force-skipWaiting on demand).
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  if (event.data && event.data.type === 'CLEAR_CACHES') {
+    event.waitUntil(
+      caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n))))
+    );
+  }
 });
 
 // Fetch: Cache First for static, Network First for Firebase
