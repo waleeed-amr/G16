@@ -77,7 +77,8 @@ const state = {
     settings: null,
     activity: [],
     currentTab: 'overview',
-    search: '',
+    search: '',          // team search
+    postsSearch: '',     // posts search
     selectedTeam: new Set(),
     selectedPosts: new Set(),
     focusTrapRelease: null,
@@ -87,18 +88,44 @@ const state = {
 };
 
 // --- TOAST ---
-function toast(msg, type = 'info', duration = 3500) {
+// Enhanced toast: now supports an optional action button (used for Undo).
+// Backward-compatible: existing calls (msg, type, duration) still work.
+// New usage: toast('Deleted', 'success', 6000, { label: 'تراجع', onClick: fn })
+function toast(msg, type = 'info', duration = 3500, action = null) {
     const wrap = document.getElementById('toastContainer');
-    if (!wrap) return;
+    if (!wrap) return () => {};
     const el = document.createElement('div');
     el.className = 'toast ' + type;
     const icons = { success: 'check-circle', error: 'warning-circle', warning: 'warning', info: 'info' };
-    el.innerHTML = `<i class="ph-fill ph-${icons[type]}" aria-hidden="true"></i><span class="toast-msg">${_escapeHTML(msg)}</span>`;
+    let html = `<i class="ph-fill ph-${icons[type]}" aria-hidden="true"></i><span class="toast-msg">${_escapeHTML(msg)}</span>`;
+    if (action && action.label) {
+        // Use a real <button> for accessibility; uppercase label for emphasis.
+        html += `<button type="button" class="toast-action">${_escapeHTML(action.label)}</button>`;
+        // Visual countdown bar so the user knows how much time is left.
+        html += `<div class="toast-undo-bar" style="animation-duration:${duration}ms"></div>`;
+    }
+    el.innerHTML = html;
     wrap.appendChild(el);
-    setTimeout(() => {
+
+    let dismissed = false;
+    const dismiss = () => {
+        if (dismissed) return;
+        dismissed = true;
         el.classList.add('fade-out');
         setTimeout(() => el.remove(), 300);
-    }, duration);
+    };
+
+    if (action && action.label) {
+        const btn = el.querySelector('.toast-action');
+        btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            try { if (action.onClick) action.onClick(); } catch (e) { console.error('toast action error:', e); }
+            dismiss();
+        });
+    }
+
+    setTimeout(dismiss, duration);
+    return dismiss; // Caller can dismiss early if needed.
 }
 
 // --- ACTIVITY LOG (Firestore) ---
@@ -504,18 +531,39 @@ async function persistTeamOrder() {
 
 async function bulkDeleteTeam() {
     if (!state.selectedTeam.size) return;
-    if (!confirm(`هل أنت متأكد من حذف ${state.selectedTeam.size} عضو؟`)) return;
+    const count = state.selectedTeam.size;
+    if (!confirm(`هل أنت متأكد من حذف ${count} عضو؟`)) return;
+
+    // Capture snapshots before delete for Undo.
+    const snapshots = state.team.filter(m => state.selectedTeam.has(m.id)).map(m => ({ ...m }));
+
     try {
         const batch = writeBatch(db);
         state.selectedTeam.forEach(id => {
             batch.delete(doc(db, 'team', id));
         });
         await batch.commit();
-        toast(`تم حذف ${state.selectedTeam.size} عضو`, 'success');
-        logActivity('delete', `Bulk deleted ${state.selectedTeam.size} team members`);
+        toast(`تم حذف ${count} عضو`, 'success', 6000, {
+            label: 'تراجع',
+            onClick: async () => {
+                try {
+                    const batch2 = writeBatch(db);
+                    snapshots.forEach(m => {
+                        const { id: _drop, ...data } = m;
+                        batch2.set(doc(db, 'team', m.id), data);
+                    });
+                    await withRetry(() => batch2.commit());
+                    toast(`تم استعادة ${snapshots.length} عضو`, 'success');
+                    logActivity('add', `Restored ${snapshots.length} team members`);
+                } catch (err) {
+                    toast('فشل الاستعادة: ' + (err?.message || err), 'error', 6000);
+                }
+            }
+        });
+        logActivity('delete', `Bulk deleted ${count} team members`);
         state.selectedTeam.clear();
     } catch (err) {
-        toast('فشل الحذف الجماعي', 'error');
+        toast('فشل الحذف الجماعي: ' + (err?.message || err), 'error');
     }
 }
 
@@ -680,16 +728,33 @@ if (memberForm) {
 async function deleteMember(id) {
     const m = state.team.find(x => x.id === id);
     if (!m) return;
-    if (!confirm('حذف "' + (m.name || 'هذا العضو') + '"؟ لا يمكن التراجع.')) return;
+    if (!confirm('حذف "' + (m.name || 'هذا العضو') + '"؟')) return;
+
+    // Snapshot for Undo (preserve the original id + all fields).
+    const snapshot = { ...m };
+
     try {
         await withRetry(() => deleteDoc(doc(db, 'team', id)));
         if (m.photoUrl?.includes('firebasestorage')) {
             try { await deleteObject(ref(storage, m.photoUrl)); } catch (_) {}
         }
-        toast('تم الحذف', 'success');
+        // Show Undo toast — 6 seconds to act.
+        toast('تم حذف "' + (m.name || 'العضو') + '"', 'success', 6000, {
+            label: 'تراجع',
+            onClick: async () => {
+                try {
+                    const { id: _drop, ...data } = snapshot;
+                    await withRetry(() => setDoc(doc(db, 'team', snapshot.id), data));
+                    toast('تم استعادة "' + (snapshot.name || 'العضو') + '"', 'success');
+                    logActivity('add', `Restored member: ${snapshot.name}`);
+                } catch (err) {
+                    toast('فشل الاستعادة: ' + (err?.message || err), 'error', 6000);
+                }
+            }
+        });
         logActivity('delete', `Deleted member: ${m.name}`);
     } catch (err) {
-        toast('فشل الحذف: ' + err.message, 'error');
+        toast('فشل الحذف: ' + (err?.message || err), 'error');
     }
 }
 
@@ -699,8 +764,25 @@ function renderPostsList() {
     if (!wrap) return;
     wrap.innerHTML = '';
 
+    // Apply posts search filter (title, description, author name)
+    const q = (state.postsSearch || '').trim().toLowerCase();
+    const filtered = state.posts.filter(p => {
+        if (!q) return true;
+        const haystack = (
+            (p.title || '') + ' ' +
+            (p.description || '') + ' ' +
+            (p.authorType === 'member' ? (state.team.find(m => m.id === p.authorId)?.name || '') : 'الفريق')
+        ).toLowerCase();
+        return haystack.includes(q);
+    });
+
     if (!state.posts.length) {
         wrap.innerHTML = '<div class="empty-state"><i class="ph ph-presentation-chart"></i><span>لا توجد منشورات</span></div>';
+        return;
+    }
+
+    if (!filtered.length) {
+        wrap.innerHTML = '<div class="empty-state"><i class="ph ph-magnifying-glass"></i><span>لا توجد نتائج لـ "' + _escapeHTML(q) + '"</span></div>';
         return;
     }
 
@@ -715,7 +797,7 @@ function renderPostsList() {
     `;
     wrap.appendChild(bulkBar);
 
-    state.posts.forEach(post => {
+    filtered.forEach(post => {
         const row = document.createElement('div');
         row.className = 'post-row' + (state.selectedPosts.has(post.id) ? ' selected' : '');
         row.dataset.id = post.id;
@@ -788,20 +870,50 @@ async function persistPostOrder() {
 
 async function bulkDeletePosts() {
     if (!state.selectedPosts.size) return;
-    if (!confirm(`حذف ${state.selectedPosts.size} منشور؟`)) return;
+    const count = state.selectedPosts.size;
+    if (!confirm(`حذف ${count} منشور؟`)) return;
+
+    // Capture snapshots before delete for Undo.
+    const snapshots = state.posts.filter(p => state.selectedPosts.has(p.id)).map(p => ({ ...p }));
+
     try {
         const batch = writeBatch(db);
         state.selectedPosts.forEach(id => batch.delete(doc(db, 'posts', id)));
         await batch.commit();
-        toast(`تم حذف ${state.selectedPosts.size} منشور`, 'success');
-        logActivity('delete', `Bulk deleted ${state.selectedPosts.size} posts`);
+        toast(`تم حذف ${count} منشور`, 'success', 6000, {
+            label: 'تراجع',
+            onClick: async () => {
+                try {
+                    const batch2 = writeBatch(db);
+                    snapshots.forEach(p => {
+                        const { id: _drop, ...data } = p;
+                        batch2.set(doc(db, 'posts', p.id), data);
+                    });
+                    await withRetry(() => batch2.commit());
+                    toast(`تم استعادة ${snapshots.length} منشور`, 'success');
+                    logActivity('add', `Restored ${snapshots.length} posts`);
+                } catch (err) {
+                    toast('فشل الاستعادة: ' + (err?.message || err), 'error', 6000);
+                }
+            }
+        });
+        logActivity('delete', `Bulk deleted ${count} posts`);
         state.selectedPosts.clear();
     } catch (err) {
-        toast('فشل الحذف الجماعي', 'error');
+        toast('فشل الحذف الجماعي: ' + (err?.message || err), 'error');
     }
 }
 
 document.getElementById('addPostBtn')?.addEventListener('click', () => openPostEditor());
+
+// Posts search input (debounced to avoid re-rendering on every keystroke)
+const postsSearch = document.getElementById('adminPostsSearch');
+if (postsSearch) {
+    postsSearch.addEventListener('input', _debounce((e) => {
+        state.postsSearch = e.target.value;
+        renderPostsList();
+    }, 150));
+}
 
 // --- POST EDITOR ---
 function openPostEditor(id = null) {
@@ -959,12 +1071,28 @@ async function deletePost(id) {
     const p = state.posts.find(x => x.id === id);
     if (!p) return;
     if (!confirm('حذف المنشور "' + (p.title || '') + '"؟')) return;
+
+    // Snapshot for Undo
+    const snapshot = { ...p };
+
     try {
         await withRetry(() => deleteDoc(doc(db, 'posts', id)));
-        toast('تم الحذف', 'success');
+        toast('تم حذف "' + (p.title || 'المنشور') + '"', 'success', 6000, {
+            label: 'تراجع',
+            onClick: async () => {
+                try {
+                    const { id: _drop, ...data } = snapshot;
+                    await withRetry(() => setDoc(doc(db, 'posts', snapshot.id), data));
+                    toast('تم استعادة "' + (snapshot.title || 'المنشور') + '"', 'success');
+                    logActivity('add', `Restored post: ${snapshot.title}`);
+                } catch (err) {
+                    toast('فشل الاستعادة: ' + (err?.message || err), 'error', 6000);
+                }
+            }
+        });
         logActivity('delete', `Deleted post: ${p.title}`);
     } catch (err) {
-        toast('فشل الحذف', 'error');
+        toast('فشل الحذف: ' + (err?.message || err), 'error');
     }
 }
 
@@ -1082,3 +1210,202 @@ function initBackupRestore() {
         });
     }
 }
+
+// ============================================================
+//   KEYBOARD SHORTCUTS
+// ============================================================
+//
+// Shortcuts:
+//   Ctrl/Cmd + N        → New post
+//   Ctrl/Cmd + M        → New member
+//   Ctrl/Cmd + S        → Save current form (settings / member / post)
+//   Esc                 → Close topmost modal
+//   /                   → Focus the search input in the active tab
+//   ?                   → Show shortcuts help modal
+//   1 / 2 / 3 / 4 / 5   → Switch to overview / team / posts / activity / settings
+//
+// All shortcuts are disabled when the user is typing in an input/textarea
+// (except Esc and Ctrl+S, which are explicitly user-driven).
+const _isTypingTarget = (el) => {
+    if (!el) return false;
+    const tag = (el.tagName || '').toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return false;
+};
+
+const _switchTab = (tab) => {
+    const navItem = document.querySelector(`.nav-item[data-tab="${tab}"]`);
+    if (navItem) navItem.click();
+};
+
+const _focusSearchInActiveTab = () => {
+    const active = document.querySelector('.tab-content.active');
+    if (!active) return;
+    const search = active.querySelector('.search-input input');
+    if (search) {
+        search.focus();
+        search.select?.();
+    }
+};
+
+const _closeTopmostModal = () => {
+    const modals = Array.from(document.querySelectorAll('.modal-backdrop'))
+        .filter(m => m.style.display !== 'none' && m.style.display !== '')
+        .filter(m => m.getAttribute('aria-hidden') !== 'true');
+    if (!modals.length) return;
+    const top = modals[modals.length - 1];
+    if (top.id === 'postEditor') closePostEditor();
+    else if (top.id === 'memberEditor') closeEditor();
+    else if (top.classList.contains('shortcuts-modal')) closeShortcutsModal();
+};
+
+function showShortcutsModal() {
+    if (document.getElementById('shortcutsModal')) return; // already open
+    const wrap = document.createElement('div');
+    wrap.id = 'shortcutsModal';
+    wrap.className = 'modal-backdrop shortcuts-modal';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.setAttribute('aria-hidden', 'true');
+    wrap.innerHTML = `
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2><i class="ph ph-keyboard" style="color:var(--primary);margin-inline-end:0.5rem"></i> اختصارات لوحة المفاتيح</h2>
+                <button class="modal-close" type="button" id="closeShortcuts" aria-label="إغلاق">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="shortcuts-list">
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-plus-circle"></i> إضافة منشور جديد</div>
+                        <div class="shortcut-keys"><span class="kbd">Ctrl</span><span class="plus">+</span><span class="kbd">N</span></div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-user-plus"></i> إضافة عضو جديد</div>
+                        <div class="shortcut-keys"><span class="kbd">Ctrl</span><span class="plus">+</span><span class="kbd">M</span></div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-floppy-disk"></i> حفظ النموذج الحالي</div>
+                        <div class="shortcut-keys"><span class="kbd">Ctrl</span><span class="plus">+</span><span class="kbd">S</span></div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-magnifying-glass"></i> التركيز على البحث</div>
+                        <div class="shortcut-keys"><span class="kbd">/</span></div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-x-circle"></i> إغلاق المودال</div>
+                        <div class="shortcut-keys"><span class="kbd">Esc</span></div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-squares-four"></i> نظرة عامة</div>
+                        <div class="shortcut-keys"><span class="kbd">1</span></div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-users-three"></i> الفريق</div>
+                        <div class="shortcut-keys"><span class="kbd">2</span></div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-article"></i> المنشورات</div>
+                        <div class="shortcut-keys"><span class="kbd">3</span></div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-clock-counter-clockwise"></i> سجل النشاط</div>
+                        <div class="shortcut-keys"><span class="kbd">4</span></div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-faders"></i> الإعدادات</div>
+                        <div class="shortcut-keys"><span class="kbd">5</span></div>
+                    </div>
+                </div>
+                <p style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin-top:1.5rem">
+                    اضغط <span class="kbd">?</span> في أي وقت لعرض هذه القائمة
+                </p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(wrap);
+    wrap.style.display = 'flex';
+    requestAnimationFrame(() => {
+        wrap.classList.add('active');
+        wrap.setAttribute('aria-hidden', 'false');
+    });
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) closeShortcutsModal(); });
+    document.getElementById('closeShortcuts').addEventListener('click', closeShortcutsModal);
+}
+
+function closeShortcutsModal() {
+    const modal = document.getElementById('shortcutsModal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
+    setTimeout(() => modal.remove(), 300);
+}
+
+document.addEventListener('keydown', (e) => {
+    const typing = _isTypingTarget(e.target);
+    const ctrl = e.ctrlKey || e.metaKey;
+
+    // Always-on shortcuts (even when typing)
+    if (e.key === 'Escape') {
+        _closeTopmostModal();
+        // If focus is in an input, blur it on Esc
+        if (typing && e.target.blur) e.target.blur();
+        return;
+    }
+
+    if (ctrl && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        // Find the form inside the visible modal OR the active tab.
+        const modal = document.querySelector('.modal-backdrop.active form, .modal-backdrop[style*="display: flex"] form');
+        const tabForm = document.querySelector('.tab-content.active form');
+        const form = modal || tabForm;
+        if (form) {
+            if (typeof form.requestSubmit === 'function') form.requestSubmit();
+            else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+            toast('جاري الحفظ...', 'info', 1500);
+        } else {
+            toast('لا يوجد نموذج للحفظ في الصفحة الحالية', 'warning', 2500);
+        }
+        return;
+    }
+
+    // From here on: ignore all shortcuts when typing in an input
+    if (typing) return;
+
+    if (ctrl && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        if (typeof openPostEditor === 'function') openPostEditor();
+        return;
+    }
+
+    if (ctrl && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        if (typeof openEditor === 'function') openEditor();
+        return;
+    }
+
+    if (!ctrl) {
+        if (e.key === '/') {
+            e.preventDefault();
+            _focusSearchInActiveTab();
+            return;
+        }
+        if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+            e.preventDefault();
+            if (document.getElementById('shortcutsModal')) closeShortcutsModal();
+            else showShortcutsModal();
+            return;
+        }
+        // Tab switcher: 1-5
+        if (['1', '2', '3', '4', '5'].includes(e.key)) {
+            const tabs = ['overview', 'team', 'posts', 'activity', 'settings'];
+            _switchTab(tabs[parseInt(e.key, 10) - 1]);
+            return;
+        }
+    }
+});
+
+// Wire the keyboard icon in the topbar
+document.getElementById('shortcutsBtn')?.addEventListener('click', showShortcutsModal);

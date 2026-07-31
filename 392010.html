@@ -112,6 +112,9 @@
                     <button class="btn-icon" id="refreshBtn" type="button" title="Refresh data" aria-label="Refresh data">
                         <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
                     </button>
+                    <button class="btn-icon" id="shortcutsBtn" type="button" title="اختصارات لوحة المفاتيح (?)" aria-label="Keyboard shortcuts">
+                        <i class="ph ph-keyboard" aria-hidden="true"></i>
+                    </button>
                     <div class="topbar-status" aria-live="polite">
                         <span class="status-dot" aria-hidden="true"></span>
                         <span id="adminEmail">ONLINE</span>
@@ -245,6 +248,13 @@
                     </div>
 
                     <div class="panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-article" aria-hidden="true"></i> المنشورات</h3>
+                            <div class="search-input" style="max-width:280px;">
+                                <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+                                <input type="text" id="adminPostsSearch" placeholder="ابحث في المنشورات (عنوان، وصف، كاتب)..." autocomplete="off">
+                            </div>
+                        </div>
                         <div class="panel-body">
                             <div class="posts-list" id="adminPostsList" aria-live="polite">
                                 <div class="empty-state" role="status">
