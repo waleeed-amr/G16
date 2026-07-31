@@ -247,17 +247,9 @@ async function loadSiteData() {
         // Update stats
         const statMembers = document.getElementById('stat-members');
         const statPosts = document.getElementById('stat-posts');
-        const statPages = document.getElementById('stat-pages');
-        
-        let reportPages = 47; // fallback
-        const settingsSnapData = settingsSnap.exists() ? settingsSnap.data() : {};
-        if (settingsSnapData.reportPages !== undefined) {
-            reportPages = settingsSnapData.reportPages;
-        }
 
         if (statMembers) statMembers.dataset.counter = state.team.length;
         if (statPosts) statPosts.dataset.counter = state.posts.length;
-        if (statPages) statPages.dataset.counter = reportPages;
 
         initCounters(); // Re-trigger the counter animation with the actual values
         

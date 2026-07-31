@@ -308,7 +308,6 @@ async function loadSettings() {
         $('site-master-url').value = state.settings.masterPresentationUrl || '';
         $('site-preview-url').value = state.settings.reportPreviewUrl || '';
         $('site-download-url').value = state.settings.reportUrl || '';
-        if ($('site-report-pages')) $('site-report-pages').value = state.settings.reportPages || 0;
     } else {
         state.settings = null;
     }
@@ -820,7 +819,6 @@ if (settingsForm) {
             masterPresentationUrl: masterUrl || '',
             reportPreviewUrl: previewUrl || '',
             reportUrl: downloadUrl || '',
-            reportPages: parseInt($('site-report-pages') ? $('site-report-pages').value : '47', 10) || 0,
             updatedAt: new Date().toISOString(),
         };
         if (data.title.length < 1) {
