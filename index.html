@@ -267,17 +267,17 @@
         <i class="ph-bold ph-arrow-up" aria-hidden="true"></i>
     </button>
 
-    <script type="module" src="./main.js?v=5"></script>
+    <script type="module" src="./main.js?v=6"></script>
     <script>
         // Register Service Worker.
-        // NOTE: The ?v=5 query string is critical — without it, the browser
+        // NOTE: The ?v=6 query string is critical — without it, the browser
         // serves the OLD sw.js from its HTTP cache, the OLD sw.js installs
         // CACHE_NAME = 'g16-nti-v2', and the user is stuck on the broken
         // admin.js forever. The query string makes the browser see a
         // different URL and re-fetch from the network.
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js?v=5')
+                navigator.serviceWorker.register('./sw.js?v=6')
                     .then(reg => {
                         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
                         reg.addEventListener('updatefound', () => {

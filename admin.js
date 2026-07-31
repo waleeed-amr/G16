@@ -725,6 +725,7 @@ function openEditor(id) {
         editorTitle.textContent = 'إضافة عضو جديد';
     }
     editor.style.display = 'flex';
+    requestAnimationFrame(() => editor.classList.add('active'));
     editor.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
     console.log('[openEditor] member editor opened, id=', id || '(new)');
@@ -732,8 +733,11 @@ function openEditor(id) {
 
 function closeEditor() {
     if (!editor) return;
-    editor.style.display = 'none';
+    editor.classList.remove('active');
     editor.setAttribute('aria-hidden', 'true');
+    setTimeout(() => {
+        if (!editor.classList.contains('active')) editor.style.display = 'none';
+    }, 300);
     document.getElementById('member-photo-file').value = '';
 }
 
@@ -1391,6 +1395,7 @@ function openResourceEditor(id = null) {
         document.getElementById('resourceEditorTitle').textContent = 'إضافة رابط جديد';
     }
     modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('active'));
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
     console.log('[openResourceEditor] opened, id=', id || '(new)');
@@ -1399,8 +1404,11 @@ function openResourceEditor(id = null) {
 function closeResourceEditor() {
     const modal = document.getElementById('resourceEditor');
     if (!modal) return;
-    modal.style.display = 'none';
+    modal.classList.remove('active');
     modal.setAttribute('aria-hidden', 'true');
+    setTimeout(() => {
+        if (!modal.classList.contains('active')) modal.style.display = 'none';
+    }, 300);
     document.body.style.overflow = '';
 }
 

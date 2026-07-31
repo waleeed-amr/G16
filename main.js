@@ -4,8 +4,8 @@
 //   All user content is rendered via textContent.
 //   No innerHTML interpolation of untrusted strings.
 // ==========================================================
-// ?v=5 forces the browser to bypass the HTTP cache and refetch.
-import { db } from './firebase-config.js?v=5';
+// ?v=6 forces the browser to bypass the HTTP cache and refetch.
+import { db } from './firebase-config.js?v=6';
 
 // --- ADVANCED UTILS (Network Resilience & Perf) ---
 const withRetry = async (fn, retries = 3, delay = 1500) => {
@@ -225,21 +225,24 @@ async function loadSiteData() {
     const teamGrid = document.getElementById('team-grid');
 
     try {
-        const settingsSnap = await withRetry(() => getDoc(doc(db, "settings", "site")));
-        if (settingsSnap.exists()) {
-            const data = settingsSnap.data();
-            const title = data.title || 'مشروع تخرج NTI';
-            const desc = data.heroDescription || 'منصة السايبر سيكيورتي المتقدمة - جروب 16';
-
-            if (heroTitle) {
-                heroTitle.textContent = title;
-            }
-            if (seoTitle) seoTitle.textContent = title;
-            if (heroDesc) heroDesc.textContent = desc;
-        } else {
-            if (heroTitle) heroTitle.textContent = 'لا توجد بيانات';
-            if (heroDesc) heroDesc.textContent = 'يرجى ضبط إعدادات الموقع من لوحة التحكم.';
+        // settings/site is OPTIONAL. If the doc doesn't exist yet (fresh
+        // project, or admin hasn't saved the site config), we silently use
+        // the same Arabic defaults that ship in index.html. This used to
+        // flash a "لا توجد بيانات" error ~5s after page load — confusing
+        // for first-time visitors before the admin runs the bootstrap.
+        let settingsSnap = null;
+        try {
+            settingsSnap = await withRetry(() => getDoc(doc(db, "settings", "site")));
+        } catch (e) {
+            console.warn('[loadSiteData] settings fetch failed (using defaults):', e?.message);
         }
+        const data = settingsSnap && settingsSnap.exists() ? settingsSnap.data() : {};
+        const title = data.title || 'مشروع تخرج NTI';
+        const desc = data.heroDescription || 'منصة السايبر سيكيورتي المتقدمة - جروب 16';
+
+        if (heroTitle) heroTitle.textContent = title;
+        if (seoTitle) seoTitle.textContent = title;
+        if (heroDesc) heroDesc.textContent = desc;
 
         const teamSnap = await withRetry(() => getDocs(query(collection(db, "team"), orderBy("order", "asc"))));
         state.team = [];
@@ -268,7 +271,7 @@ async function loadSiteData() {
         // settings fields so the existing Master Presentation / Final Report
         // cards still appear (with their old behavior — show-if-URL-exists).
         if (!state.resources.length) {
-            const s = settingsSnap.exists() ? settingsSnap.data() : {};
+            const s = data; // already safe above (defaults to {} if doc missing)
             if (s.masterPresentationUrl) {
                 state.resources.push({
                     id: '__legacy_master',

@@ -1,7 +1,8 @@
-// CACHE bumped to v5 — new 'Resources' feature: admin can add/manage
-// external file/report links, and the main site's "Files and Reports"
-// section now renders dynamically from the `resources` collection.
-const CACHE_NAME = 'g16-nti-v5';
+// CACHE bumped to v6 — graceful "no settings doc" handling. Previously,
+// the main site flashed a "لا توجد بيانات" error ~5s after load when the
+// admin hadn't saved the site config yet. Now it silently uses the same
+// Arabic defaults that ship in index.html.
+const CACHE_NAME = 'g16-nti-v6';
 const STATIC_ASSETS = [
   './',
   './index.html',
