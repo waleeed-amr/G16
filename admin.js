@@ -1,4 +1,4 @@
-// ==========================================================
+﻿// ==========================================================
 //   NTI SECURE — Admin Dashboard Logic v2.0
 //   Firebase Storage · Activity Log · Charts · Backup/Restore
 // ==========================================================
@@ -15,6 +15,56 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-storage.js";
 
 // --- UTILS ---
+// --- ADVANCED UTILS (Network Resilience) ---
+// Don't waste time retrying errors that will never succeed:
+//   - permission-denied  → user not in admin_roles / rules block the write
+//   - unauthenticated    → session expired, retry won't help
+//   - not-found          → doc/collection doesn't exist
+//   - invalid-argument   → bad payload, not a network issue
+// Only retry on transient network / unavailable errors.
+const _FATAL_FIRESTORE_CODES = new Set([
+    'permission-denied',
+    'unauthenticated',
+    'not-found',
+    'invalid-argument',
+    'failed-precondition',
+    'already-exists',
+    'cancelled',
+    'out-of-range',
+    'unimplemented',
+    'data-loss'
+]);
+
+const _isFatal = (err) => {
+    const code = err?.code || '';
+    if (_FATAL_FIRESTORE_CODES.has(code)) return true;
+    // Storage SDK uses different error codes — also non-retryable:
+    if (/^storage\/unauthorized$|^storage\/unauthenticated$/.test(code)) return true;
+    // Offline errors should also fail fast (Firestore will surface real cause on next call)
+    if (/offline|client is offline|webchannel/i.test(err?.message || '')) {
+        // For "client is offline" we DO want to retry — but only once, and only on real offline.
+        // Permission errors are reported as "offline" sometimes in some versions, so be defensive:
+        return code === 'permission-denied';
+    }
+    return false;
+};
+
+const withRetry = async (fn, retries = 3, delay = 1500) => {
+    for (let i = 0; i < retries; i++) {
+        try { return await fn(); }
+        catch (err) {
+            if (_isFatal(err)) {
+                console.warn('[withRetry] fatal error, no retry:', err?.code || '', err?.message);
+                throw err;
+            }
+            if (i === retries - 1) throw err;
+            console.warn('[withRetry] retry', i + 1, '/', retries, 'after', delay, 'ms', err?.code || err?.message);
+            await new Promise(r => setTimeout(r, delay));
+            delay *= 1.5;
+        }
+    }
+};
+// --------------------------------------------------
 const _safeURL = (s, fb) => (s && /^https?:\/\//i.test(s)) ? s : (fb || '#');
 const _safeURLOrNull = (s) => (s && /^https?:\/\//i.test(s)) ? s : null;
 const _escapeHTML = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -52,6 +102,9 @@ function toast(msg, type = 'info', duration = 3500) {
 }
 
 // --- ACTIVITY LOG (Firestore) ---
+// Returns a Promise that resolves to true on success, false on failure.
+// NEVER throws — activity logging is a side effect; failures must not break
+// the main user action.
 async function logActivity(type, title, details = '') {
     try {
         await addDoc(collection(db, 'activity'), {
@@ -60,8 +113,10 @@ async function logActivity(type, title, details = '') {
             timestamp: new Date().toISOString(),
             createdAt: Date.now()
         });
+        return true;
     } catch (e) {
-        console.error('Activity log failed:', e);
+        console.warn('[logActivity] failed:', e?.code, e?.message);
+        return false;
     }
 }
 
@@ -121,15 +176,18 @@ if (togglePw) {
 }
 
 // --- DASHBOARD INIT ---
+// Note: All form/editor/backup listeners are attached at module load time
+// (settings form, member editor, post editor, backup/restore). The dashboard
+// only needs to kick off the tabs, sidebar, real-time listeners, and the
+// initial settings load + login activity.
 function initDashboard() {
     initTabs();
     initSidebar();
     initRealtimeListeners();
-    initSettingsForm();
-    initMemberEditor();
-    initPostEditor();
-    initBackupRestore();
-    logActivity('settings', 'Admin logged in');
+    // Fire-and-forget: don't let activity-log failure block dashboard boot.
+    logActivity('settings', 'Admin logged in').catch(err => {
+        console.warn('[initDashboard] activity log skipped:', err?.message || err);
+    });
 }
 
 // --- REAL-TIME LISTENERS ---
@@ -144,7 +202,14 @@ function initRealtimeListeners() {
             renderTeamList();
             updatePostAuthorSelect();
         },
-        (err) => toast('خطأ في تحميل الفريق: ' + err.message, 'error')
+        (err) => {
+            console.error('[team listener] error:', err);
+            if (err?.code === 'permission-denied') {
+                toast('لا توجد صلاحيات لقراءة الفريق — تأكد من admin_roles', 'error', 6000);
+            } else {
+                toast('خطأ في تحميل الفريق: ' + (err?.message || err), 'error');
+            }
+        }
     );
 
     // Posts real-time
@@ -156,7 +221,14 @@ function initRealtimeListeners() {
             renderPostsList();
             renderMetrics();
         },
-        (err) => toast('خطأ في تحميل المنشورات: ' + err.message, 'error')
+        (err) => {
+            console.error('[posts listener] error:', err);
+            if (err?.code === 'permission-denied') {
+                toast('لا توجد صلاحيات لقراءة المنشورات — تأكد من admin_roles', 'error', 6000);
+            } else {
+                toast('خطأ في تحميل المنشورات: ' + (err?.message || err), 'error');
+            }
+        }
     );
 
     // Activity log real-time (last 50)
@@ -167,7 +239,13 @@ function initRealtimeListeners() {
             snap.forEach(d => state.activity.push({ id: d.id, ...d.data() }));
             renderActivityLog();
         },
-        (err) => console.error('Activity log error:', err)
+        (err) => {
+            console.error('[activity listener] error:', err);
+            // Don't spam toasts for activity log — it's secondary.
+            if (err?.code === 'permission-denied') {
+                console.warn('Activity log listener: missing admin role for activity collection');
+            }
+        }
     );
 
     // Settings one-time
@@ -175,14 +253,26 @@ function initRealtimeListeners() {
 }
 
 async function loadSettings() {
-    const snap = await getDoc(doc(db, 'settings', 'site'));
-    if (snap.exists()) {
-        state.settings = snap.data();
-        document.getElementById('site-title').value = state.settings.title || '';
-        document.getElementById('site-desc').value = state.settings.heroDescription || '';
-        document.getElementById('site-master-url').value = state.settings.masterPresentationUrl || '';
-        document.getElementById('site-preview-url').value = state.settings.reportPreviewUrl || '';
-        document.getElementById('site-download-url').value = state.settings.reportUrl || '';
+    try {
+        const snap = await withRetry(() => getDoc(doc(db, 'settings', 'site')));
+        if (snap.exists()) {
+            state.settings = snap.data();
+            document.getElementById('site-title').value = state.settings.title || '';
+            document.getElementById('site-desc').value = state.settings.heroDescription || '';
+            document.getElementById('site-master-url').value = state.settings.masterPresentationUrl || '';
+            document.getElementById('site-preview-url').value = state.settings.reportPreviewUrl || '';
+            document.getElementById('site-download-url').value = state.settings.reportUrl || '';
+            renderMetrics();
+        }
+    } catch (err) {
+        console.warn('[loadSettings] failed:', err?.code, err?.message);
+        // Don't crash the dashboard on settings load failure — they can still
+        // use the rest of the panel and the form will be empty until retry.
+        if (err?.code === 'permission-denied') {
+            toast('لا توجد صلاحيات لقراءة الإعدادات — تأكد من admin_roles', 'error', 6000);
+        } else if (/offline/i.test(err?.message || '')) {
+            toast('فشل تحميل الإعدادات — لا اتصال بـ Firestore', 'warning', 4000);
+        }
     }
 }
 
@@ -568,12 +658,12 @@ if (memberForm) {
             };
 
             if (id) {
-                await updateDoc(doc(db, 'team', id), data);
+                await withRetry(() => updateDoc(doc(db, 'team', id), data));
                 toast('تم التحديث بنجاح', 'success');
                 logActivity('edit', `Updated member: ${name}`);
             } else {
                 data.createdAt = new Date().toISOString();
-                await addDoc(collection(db, 'team'), data);
+                await withRetry(() => addDoc(collection(db, 'team'), data));
                 toast('تمت الإضافة بنجاح', 'success');
                 logActivity('add', `Added member: ${name}`);
             }
@@ -592,7 +682,7 @@ async function deleteMember(id) {
     if (!m) return;
     if (!confirm('حذف "' + (m.name || 'هذا العضو') + '"؟ لا يمكن التراجع.')) return;
     try {
-        await deleteDoc(doc(db, 'team', id));
+        await withRetry(() => deleteDoc(doc(db, 'team', id)));
         if (m.photoUrl?.includes('firebasestorage')) {
             try { await deleteObject(ref(storage, m.photoUrl)); } catch (_) {}
         }
@@ -826,24 +916,42 @@ document.getElementById('postForm')?.addEventListener('submit', async (e) => {
         updatedAt: new Date().toISOString()
     };
 
+    // Save original button label so we can restore it on error.
+    const originalLabel = btn ? btn.innerHTML : '';
     try {
-        btn.disabled = true;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ph ph-spinner-gap ph-spin"></i><span>جاري النشر...</span>';
+        }
         const id = document.getElementById('post-id').value;
         if (id) {
-            await updateDoc(doc(db, 'posts', id), payload);
+            await withRetry(() => updateDoc(doc(db, 'posts', id), payload));
             toast('تم التعديل', 'success');
             logActivity('edit', `Updated post: ${title}`);
         } else {
             payload.createdAt = new Date().toISOString();
-            await addDoc(collection(db, 'posts'), payload);
+            await withRetry(() => addDoc(collection(db, 'posts'), payload));
             toast('تمت الإضافة', 'success');
             logActivity('add', `Created post: ${title}`);
         }
         closePostEditor();
     } catch (err) {
-        toast('خطأ: ' + err.message, 'error');
+        console.error('[postForm submit] error:', err);
+        // Translate common Firestore errors to friendlier Arabic messages.
+        let msg = err?.message || 'فشل الحفظ';
+        if (err?.code === 'permission-denied') {
+            msg = 'صلاحيات مرفوضة — تأكد إن الـ UID موجود في admin_roles';
+        } else if (/offline/i.test(msg)) {
+            msg = 'لا يوجد اتصال بـ Firestore — تأكد من الإنترنت';
+        }
+        toast('خطأ: ' + msg, 'error', 6000);
     } finally {
-        btn.disabled = false;
+        // ALWAYS re-enable the button — even on unexpected errors — so it
+        // never stays "frozen".
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalLabel || '<i class="ph ph-check"></i> حفظ المنشور';
+        }
     }
 });
 
@@ -852,7 +960,7 @@ async function deletePost(id) {
     if (!p) return;
     if (!confirm('حذف المنشور "' + (p.title || '') + '"؟')) return;
     try {
-        await deleteDoc(doc(db, 'posts', id));
+        await withRetry(() => deleteDoc(doc(db, 'posts', id)));
         toast('تم الحذف', 'success');
         logActivity('delete', `Deleted post: ${p.title}`);
     } catch (err) {
@@ -865,6 +973,7 @@ const settingsForm = document.getElementById('settings-form');
 if (settingsForm) {
     settingsForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const btn = settingsForm.querySelector('button[type="submit"]');
         const data = {
             title: document.getElementById('site-title').value.trim().slice(0, 100),
             heroDescription: document.getElementById('site-desc').value.trim().slice(0, 2000),
@@ -874,14 +983,31 @@ if (settingsForm) {
             updatedAt: new Date().toISOString()
         };
         if (data.title.length < 1) { toast('العنوان مطلوب', 'error'); return; }
+        const originalLabel = btn ? btn.innerHTML : '';
         try {
-            await setDoc(doc(db, 'settings', 'site'), data);
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="ph ph-spinner-gap ph-spin"></i><span>جاري الحفظ...</span>';
+            }
+            await withRetry(() => setDoc(doc(db, 'settings', 'site'), data));
             state.settings = data;
             toast('تم الحفظ', 'success');
             logActivity('settings', 'Updated site configuration');
             renderMetrics();
         } catch (err) {
-            toast('فشل الحفظ: ' + err.message, 'error');
+            console.error('[settings submit] error:', err);
+            let msg = err?.message || 'فشل الحفظ';
+            if (err?.code === 'permission-denied') {
+                msg = 'صلاحيات مرفوضة — تأكد إن الـ UID موجود في admin_roles';
+            } else if (/offline/i.test(msg)) {
+                msg = 'لا يوجد اتصال بـ Firestore — تأكد من الإنترنت';
+            }
+            toast('فشل الحفظ: ' + msg, 'error', 6000);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalLabel || '<i class="ph ph-floppy-disk"></i><span>حفظ الإعدادات</span>';
+            }
         }
     });
 }

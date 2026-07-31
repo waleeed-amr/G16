@@ -46,6 +46,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Activity Log (Admin only — both read and write)
+    // Public visitors don't need to see who logged in / what was edited.
+    match /activity/{logId} {
+      allow read, write: if isAdmin();
+    }
+
     // Default deny all for any other unknown collections
     match /{document=**} {
       allow read, write: if false;
