@@ -1,5 +1,5 @@
-// ==========================================================
-//   ATI SECURE — Frontend Logic (Social Media Feed UI)
+﻿// ==========================================================
+//   NTI SECURE — Frontend Logic (Social Media Feed UI)
 //   Data · Feed · Modal · Search · Scroll FX
 //   All user content is rendered via textContent.
 //   No innerHTML interpolation of untrusted strings.
@@ -12,7 +12,7 @@ import {
 const {
     safeURL, safeURLOrNull, escapeHTML, sanitizeRich,
     fallbackAvatar, debounce, focusTrap,
-} = window.ATI || {};
+} = window.NTI || {};
 
 // Defensive fallbacks if security.js failed to load
 const _safeURL = safeURL || ((s, fb) => (s && /^https?:\/\//i.test(s)) ? s : (fb || '#'));
@@ -207,7 +207,7 @@ async function loadSiteData() {
         const settingsSnap = await getDoc(doc(db, "settings", "site"));
         if (settingsSnap.exists()) {
             const data = settingsSnap.data();
-            const title = data.title || 'مشروع تخرج ATI';
+            const title = data.title || 'مشروع تخرج NTI';
             const desc = data.heroDescription || 'منصة السايبر سيكيورتي المتقدمة - جروب 16';
 
             if (heroTitle) {
@@ -510,7 +510,7 @@ function openMemberModal(id) {
     }
     document.getElementById('modalName').textContent = m.name || '—';
     document.getElementById('modalRole').textContent = m.role || '—';
-    document.getElementById('modalBio').textContent = m.bio || 'عضو فعّال في فريق ATI، شارك في مراحل تطوير المشروع.';
+    document.getElementById('modalBio').textContent = m.bio || 'عضو فعّال في فريق NTI، شارك في مراحل تطوير المشروع.';
     document.getElementById('modalContributions').textContent = m.contributions || 'تطوير جزء من المشروع والمساهمة في التقرير النهائي والعرض التقديمي.';
 
     // Skills — chip list, each chip is a span (textContent only)

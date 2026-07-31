@@ -1,5 +1,5 @@
-// ==========================================================
-//   ATI SECURE — Admin Dashboard Logic (Hardened)
+﻿// ==========================================================
+//   NTI SECURE — Admin Dashboard Logic (Hardened)
 //   - No client-side admin-role injection (the rules lock admin_roles
 //     to deny-all; this file trusts the server).
 //   - Photo uploads go through Firebase Storage (NOT a third-party
@@ -27,7 +27,7 @@ import {
 const {
     safeURL, safeURLOrNull, escapeHTML, fallbackAvatar,
     debounce, focusTrap, makeLoginThrottle,
-} = window.ATI || {};
+} = window.NTI || {};
 
 // Defensive fallbacks
 const _safeURL = safeURL || ((s, fb) => (s && /^https?:\/\//i.test(s)) ? s : (fb || '#'));
@@ -224,7 +224,13 @@ async function loadAllData() {
         logActivity('settings', 'Session started');
     } catch (err) {
         console.error('loadAllData:', err);
-        toast('Error loading data: ' + (err && err.message || err), 'error');
+        let errorMsg = err && err.message || err;
+        if (String(errorMsg).includes('offline')) {
+            errorMsg = 'لا يوجد اتصال بالإنترنت أو تعذر الوصول لقاعدة البيانات.';
+        } else if (String(errorMsg).includes('permission')) {
+            errorMsg = 'عذراً، حسابك لا يمتلك صلاحيات الأدمن לעرض أو تعديل البيانات.';
+        }
+        toast('خطأ في تحميل البيانات: ' + errorMsg, 'error', 6000);
     }
 }
 
@@ -865,7 +871,7 @@ if (qaExport) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'ati-export-' + Date.now() + '.json';
+        a.download = 'nti-export-' + Date.now() + '.json';
         a.rel = 'noopener noreferrer';
         document.body.appendChild(a);
         a.click();
@@ -880,88 +886,89 @@ if (qaExport) {
 //  POSTS LIST & CRUD
 // ----------------------------------------------------------
 function renderPostsList() {
-    const tbody = $('postsTableBody');
-    if (!tbody) return;
-    tbody.replaceChildren();
+    const wrap = $('adminPostsList');
+    if (!wrap) return;
+    wrap.replaceChildren();
 
     if (!state.posts.length) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = 4;
-        td.style.textAlign = 'center';
-        td.style.padding = '2rem';
-        td.style.color = 'var(--text-muted)';
-        td.textContent = '\u0644\u0627 \u062a\u0648\u062c\u062f \u0645\u0646\u0634\u0648\u0631\u0627\u062a \u062d\u062a\u0649 \u0627\u0644\u0622\u0646.';
-        tr.appendChild(td);
-        tbody.appendChild(tr);
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        const i = document.createElement('i');
+        i.className = 'ph ph-presentation-chart';
+        i.setAttribute('aria-hidden', 'true');
+        const s = document.createElement('span');
+        s.textContent = 'لا توجد مشاريع أو منشورات حتى الآن';
+        empty.appendChild(i); empty.appendChild(s);
+        wrap.appendChild(empty);
         return;
     }
 
     const frag = document.createDocumentFragment();
     state.posts.forEach(post => {
-        const tr = document.createElement('tr');
-        tr.dataset.id = post.id;
+        const row = document.createElement('div');
+        row.className = 'post-row';
+        row.dataset.id = post.id;
 
-        const tdOrder = document.createElement('td');
-        tdOrder.textContent = post.order;
-
-        const tdTitle = document.createElement('td');
-        tdTitle.className = 'member-cell';
-        const img = document.createElement('img');
-        img.className = 'member-avatar';
-        img.src = _safeURL(post.photoUrl, _fallbackAvatar(post.title));
-        img.alt = '';
-        const titleDiv = document.createElement('div');
-        titleDiv.className = 'member-info';
-        const h4 = document.createElement('h4');
-        h4.textContent = post.title || '\u0628\u062f\u0648\u0646 \u0639\u0646\u0648\u0627\u0646';
-        const pDesc = document.createElement('p');
-        pDesc.textContent = post.description ? (post.description.substring(0, 40) + '...') : '';
-        titleDiv.appendChild(h4);
-        titleDiv.appendChild(pDesc);
-        tdTitle.appendChild(img);
-        tdTitle.appendChild(titleDiv);
-
-        const tdAuthor = document.createElement('td');
-        if (post.authorType === 'team') {
-            tdAuthor.textContent = '\u0627\u0644\u0641\u0631\u064a\u0642 \u0628\u0623\u0643\u0645\u0644\u0647';
+        const thumb = document.createElement('div');
+        thumb.className = 'post-thumb';
+        if (post.photoUrl) {
+            const img = document.createElement('img');
+            img.src = _safeURL(post.photoUrl, '');
+            img.alt = '';
+            thumb.appendChild(img);
         } else {
-            const m = state.team.find(x => x.id === post.authorId);
-            tdAuthor.textContent = m ? m.name : '\u0639\u0636\u0648 \u0645\u062d\u0630\u0648\u0641';
+            const i = document.createElement('i');
+            i.className = 'ph ph-image';
+            i.setAttribute('aria-hidden', 'true');
+            thumb.appendChild(i);
         }
 
-        const tdActions = document.createElement('td');
-        const actDiv = document.createElement('div');
-        actDiv.className = 'table-actions';
+        const info = document.createElement('div');
+        info.className = 'post-info';
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'title';
+        titleDiv.textContent = post.title || 'بدون عنوان';
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'meta';
+        
+        let authorStr = 'الفريق بأكمله';
+        if (post.authorType === 'member') {
+            const m = state.team.find(x => x.id === post.authorId);
+            authorStr = m ? m.name : 'عضو محذوف';
+        }
+        metaDiv.textContent = `بواسطة: ${authorStr} — الترتيب: ${post.order}`;
+        
+        info.appendChild(titleDiv);
+        info.appendChild(metaDiv);
+
+        const actions = document.createElement('div');
+        actions.className = 'post-actions';
 
         const editBtn = document.createElement('button');
-        editBtn.className = 'btn-icon';
-        editBtn.title = '\u062a\u0639\u062f\u064a\u0644';
+        editBtn.className = 'icon-btn';
+        editBtn.title = 'تعديل';
         const ei = document.createElement('i');
         ei.className = 'ph ph-pencil-simple';
         editBtn.appendChild(ei);
         editBtn.addEventListener('click', () => openPostEditor(post.id));
 
         const delBtn = document.createElement('button');
-        delBtn.className = 'btn-icon';
-        delBtn.title = '\u062d\u0630\u0641';
-        delBtn.style.color = 'var(--danger)';
+        delBtn.className = 'icon-btn delete';
+        delBtn.title = 'حذف';
         const di = document.createElement('i');
         di.className = 'ph ph-trash';
         delBtn.appendChild(di);
         delBtn.addEventListener('click', () => deletePost(post.id, post.title));
 
-        actDiv.appendChild(editBtn);
-        actDiv.appendChild(delBtn);
-        tdActions.appendChild(actDiv);
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
 
-        tr.appendChild(tdOrder);
-        tr.appendChild(tdTitle);
-        tr.appendChild(tdAuthor);
-        tr.appendChild(tdActions);
-        frag.appendChild(tr);
+        row.appendChild(thumb);
+        row.appendChild(info);
+        row.appendChild(actions);
+        frag.appendChild(row);
     });
-    tbody.appendChild(frag);
+    wrap.appendChild(frag);
 }
 
 const addPostBtn = $('addPostBtn');
