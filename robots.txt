@@ -11,4 +11,4 @@ Allow: /
 # If you ever rename the admin file, the old name still works as a
 # decoy — log the access and ignore.
 
-Sitemap: https://group16-tanta-ati.web.app/sitemap.xml
+Sitemap: https://waleeed-amr.github.io/G16/sitemap.xml

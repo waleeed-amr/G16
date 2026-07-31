@@ -43,6 +43,7 @@ const _makeLoginThrottle = makeLoginThrottle || (() => () => true);
 // ----------------------------------------------------------
 const state = {
     team: [],
+    posts: [],
     settings: null,
     activity: [],
     currentTab: 'overview',
@@ -111,51 +112,11 @@ function toast(msg, type, duration) {
 }
 
 // ----------------------------------------------------------
-//  ACTIVITY LOG  (in-memory only — server-side audit log is a TODO)
+//  ACTIVITY LOG (in-memory only)
 // ----------------------------------------------------------
 function logActivity(icon, title) {
     state.activity.unshift({ icon, title, ts: Date.now() });
     if (state.activity.length > 50) state.activity = state.activity.slice(0, 50);
-    renderActivity();
-}
-
-function renderActivity() {
-    const wrap = $('activityList');
-    if (!wrap) return;
-    if (!state.activity.length) {
-        wrap.replaceChildren();
-        const empty = document.createElement('div');
-        empty.className = 'empty-state';
-        const i = document.createElement('i'); i.className = 'ph ph-clock-counter-clockwise'; i.setAttribute('aria-hidden', 'true');
-        const s = document.createElement('span'); s.textContent = 'No activity yet';
-        empty.appendChild(i); empty.appendChild(s);
-        wrap.appendChild(empty);
-        return;
-    }
-    const frag = document.createDocumentFragment();
-    state.activity.forEach(a => {
-        const row = document.createElement('div');
-        row.className = 'activity-item';
-        const ic = document.createElement('div');
-        ic.className = 'activity-icon ' + a.icon;
-        const ii = document.createElement('i');
-        const iconName = a.icon === 'add' ? 'plus' : a.icon === 'edit' ? 'pencil' : a.icon === 'delete' ? 'trash' : 'gear';
-        ii.className = 'ph-fill ph-' + iconName;
-        ii.setAttribute('aria-hidden', 'true');
-        ic.appendChild(ii);
-        const body = document.createElement('div');
-        body.className = 'activity-body';
-        const t = document.createElement('div');
-        t.className = 'activity-title';
-        t.textContent = a.title;
-        const ts = document.createElement('div');
-        ts.className = 'activity-time';
-        ts.textContent = formatTime(a.ts);
-        body.appendChild(t); body.appendChild(ts);
-        row.appendChild(ic); row.appendChild(body);
-        frag.appendChild(row);
-    });
-    wrap.replaceChildren(frag);
 }
 
 // ----------------------------------------------------------
@@ -251,6 +212,22 @@ function initDashboard() {
     logActivity('settings', 'Session started');
 }
 
+async function loadAllData() {
+    try {
+        await loadSettings();
+        await Promise.all([loadTeam(), loadPosts()]);
+        
+        renderMetrics();
+        renderTeamList();
+        renderPostsList();
+        
+        logActivity('settings', 'Session started');
+    } catch (err) {
+        console.error('loadAllData:', err);
+        toast('Error loading data: ' + (err && err.message || err), 'error');
+    }
+}
+
 function initTabs() {
     document.querySelectorAll('[data-tab]').forEach(el => {
         el.addEventListener('click', (e) => {
@@ -263,11 +240,10 @@ function initTabs() {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
 
             const labels = {
-                overview: ['Overview', 'System status & quick metrics'],
-                team: ['Operatives', 'Add, edit and reorder team members'],
-                settings: ['Site Config', 'Edit the public site content'],
-                preview: ['Live Preview', 'See the site as visitors will'],
-                activity: ['Activity Log', 'Recent actions on this session'],
+                overview: ['نظرة عامة', 'إحصائيات الموقع'],
+                team: ['الفريق', 'إدارة أعضاء الفريق'],
+                posts: ['المنشورات', 'إدارة المشاريع والمنشورات'],
+                settings: ['إعدادات', 'إعدادات الموقع'],
             };
             const tEl = $('topbarTitle'); if (tEl) tEl.textContent = labels[tab]?.[0] || tab;
             const sEl = $('topbarSub'); if (sEl) sEl.textContent = labels[tab]?.[1] || '';
@@ -323,20 +299,6 @@ function initReveal() {
     items.forEach(el => io.observe(el));
 }
 
-// ----------------------------------------------------------
-//  DATA LOAD
-// ----------------------------------------------------------
-async function loadAllData() {
-    try {
-        await Promise.all([loadSettings(), loadTeam()]);
-        renderMetrics();
-        renderTeamList();
-    } catch (err) {
-        console.error('loadAllData:', err);
-        toast('Error loading data: ' + (err && err.message || err), 'error');
-    }
-}
-
 async function loadSettings() {
     const snap = await getDoc(doc(db, 'settings', 'site'));
     if (snap.exists()) {
@@ -346,6 +308,7 @@ async function loadSettings() {
         $('site-master-url').value = state.settings.masterPresentationUrl || '';
         $('site-preview-url').value = state.settings.reportPreviewUrl || '';
         $('site-download-url').value = state.settings.reportUrl || '';
+        if ($('site-report-pages')) $('site-report-pages').value = state.settings.reportPages || 0;
     } else {
         state.settings = null;
     }
@@ -357,6 +320,12 @@ async function loadTeam() {
     snap.forEach(d => state.team.push({ id: d.id, ...d.data() }));
     const badge = $('teamBadge');
     if (badge) badge.textContent = state.team.length;
+}
+
+async function loadPosts() {
+    const snap = await getDocs(query(collection(db, 'posts'), orderBy('order', 'asc')));
+    state.posts = [];
+    snap.forEach(d => state.posts.push({ id: d.id, ...d.data() }));
 }
 
 // ----------------------------------------------------------
@@ -413,7 +382,7 @@ function renderMetrics() {
 }
 
 // ----------------------------------------------------------
-//  TEAM LIST  (XSS-safe: built with createElement, no innerHTML)
+//  TEAM LIST
 // ----------------------------------------------------------
 function renderTeamList() {
     const wrap = $('adminTeamList');
@@ -851,6 +820,7 @@ if (settingsForm) {
             masterPresentationUrl: masterUrl || '',
             reportPreviewUrl: previewUrl || '',
             reportUrl: downloadUrl || '',
+            reportPages: parseInt($('site-report-pages') ? $('site-report-pages').value : '47', 10) || 0,
             updatedAt: new Date().toISOString(),
         };
         if (data.title.length < 1) {
@@ -890,6 +860,7 @@ if (qaExport) {
         const data = {
             settings: state.settings,
             team: state.team,
+            posts: state.posts,
             exportedAt: new Date().toISOString(),
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -906,3 +877,288 @@ if (qaExport) {
         logActivity('settings', 'Exported data as JSON');
     });
 }
+
+// ----------------------------------------------------------
+//  POSTS LIST & CRUD
+// ----------------------------------------------------------
+function renderPostsList() {
+    const tbody = $('postsTableBody');
+    if (!tbody) return;
+    tbody.replaceChildren();
+
+    if (!state.posts.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 4;
+        td.style.textAlign = 'center';
+        td.style.padding = '2rem';
+        td.style.color = 'var(--text-muted)';
+        td.textContent = '\u0644\u0627 \u062a\u0648\u062c\u062f \u0645\u0646\u0634\u0648\u0631\u0627\u062a \u062d\u062a\u0649 \u0627\u0644\u0622\u0646.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+    }
+
+    const frag = document.createDocumentFragment();
+    state.posts.forEach(post => {
+        const tr = document.createElement('tr');
+        tr.dataset.id = post.id;
+
+        const tdOrder = document.createElement('td');
+        tdOrder.textContent = post.order;
+
+        const tdTitle = document.createElement('td');
+        tdTitle.className = 'member-cell';
+        const img = document.createElement('img');
+        img.className = 'member-avatar';
+        img.src = _safeURL(post.photoUrl, _fallbackAvatar(post.title));
+        img.alt = '';
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'member-info';
+        const h4 = document.createElement('h4');
+        h4.textContent = post.title || '\u0628\u062f\u0648\u0646 \u0639\u0646\u0648\u0627\u0646';
+        const pDesc = document.createElement('p');
+        pDesc.textContent = post.description ? (post.description.substring(0, 40) + '...') : '';
+        titleDiv.appendChild(h4);
+        titleDiv.appendChild(pDesc);
+        tdTitle.appendChild(img);
+        tdTitle.appendChild(titleDiv);
+
+        const tdAuthor = document.createElement('td');
+        if (post.authorType === 'team') {
+            tdAuthor.textContent = '\u0627\u0644\u0641\u0631\u064a\u0642 \u0628\u0623\u0643\u0645\u0644\u0647';
+        } else {
+            const m = state.team.find(x => x.id === post.authorId);
+            tdAuthor.textContent = m ? m.name : '\u0639\u0636\u0648 \u0645\u062d\u0630\u0648\u0641';
+        }
+
+        const tdActions = document.createElement('td');
+        const actDiv = document.createElement('div');
+        actDiv.className = 'table-actions';
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn-icon';
+        editBtn.title = '\u062a\u0639\u062f\u064a\u0644';
+        const ei = document.createElement('i');
+        ei.className = 'ph ph-pencil-simple';
+        editBtn.appendChild(ei);
+        editBtn.addEventListener('click', () => openPostEditor(post.id));
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn-icon';
+        delBtn.title = '\u062d\u0630\u0641';
+        delBtn.style.color = 'var(--danger)';
+        const di = document.createElement('i');
+        di.className = 'ph ph-trash';
+        delBtn.appendChild(di);
+        delBtn.addEventListener('click', () => deletePost(post.id, post.title));
+
+        actDiv.appendChild(editBtn);
+        actDiv.appendChild(delBtn);
+        tdActions.appendChild(actDiv);
+
+        tr.appendChild(tdOrder);
+        tr.appendChild(tdTitle);
+        tr.appendChild(tdAuthor);
+        tr.appendChild(tdActions);
+        frag.appendChild(tr);
+    });
+    tbody.appendChild(frag);
+}
+
+const addPostBtn = $('addPostBtn');
+if (addPostBtn) addPostBtn.addEventListener('click', () => openPostEditor());
+
+function openPostEditor(id = null) {
+    const modal = $('postEditor');
+    const form = $('postForm');
+    const authorType = $('post-author-type');
+    const authorSelect = $('post-author-id');
+    const memberGroup = $('post-member-select-group');
+    if (!modal || !form || !authorSelect || !authorType) return;
+
+    form.reset();
+    const stat = $('post-editor-status');
+    if (stat) stat.textContent = '';
+    const preview = $('postUploadPreview');
+    if (preview) {
+        preview.replaceChildren();
+        const ic = document.createElement('i');
+        ic.className = 'ph ph-image';
+        preview.appendChild(ic);
+    }
+
+    authorSelect.replaceChildren();
+    state.team.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name;
+        authorSelect.appendChild(opt);
+    });
+
+    authorType.onchange = () => {
+        memberGroup.style.display = authorType.value === 'member' ? 'block' : 'none';
+    };
+
+    if (id) {
+        const p = state.posts.find(x => x.id === id);
+        if (p) {
+            $('postEditorTitle').textContent = '\u062a\u0639\u062f\u064a\u0644 \u0627\u0644\u0645\u0646\u0634\u0648\u0631';
+            $('post-id').value = p.id;
+            $('post-title').value = p.title || '';
+            $('post-desc').value = p.description || '';
+            $('post-link').value = p.externalLink || '';
+            $('post-photo-url').value = p.photoUrl || '';
+            if (p.photoUrl && preview) {
+                const im = document.createElement('img');
+                im.src = _safeURL(p.photoUrl);
+                preview.replaceChildren(im);
+            }
+            $('post-order').value = p.order !== undefined ? p.order : 0;
+            authorType.value = p.authorType || 'team';
+            authorType.onchange();
+            if (p.authorType === 'member' && p.authorId) {
+                authorSelect.value = p.authorId;
+            }
+        }
+    } else {
+        $('postEditorTitle').textContent = '\u0625\u0636\u0627\u0641\u0629 \u0645\u0646\u0634\u0648\u0631 \u062c\u062f\u064a\u062f';
+        $('post-id').value = '';
+        authorType.value = 'team';
+        authorType.onchange();
+    }
+
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('active'));
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    if (state.focusTrapRelease) state.focusTrapRelease();
+    state.focusTrapRelease = _focusTrap(modal, closePostEditor);
+}
+
+function closePostEditor() {
+    const modal = $('postEditor');
+    if (!modal) return;
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
+    setTimeout(() => { modal.style.display = 'none'; }, 300);
+    document.body.style.overflow = '';
+    if (state.focusTrapRelease) { state.focusTrapRelease(); state.focusTrapRelease = null; }
+}
+
+if ($('closePostEditor')) $('closePostEditor').addEventListener('click', closePostEditor);
+if ($('cancelPostEditor')) $('cancelPostEditor').addEventListener('click', closePostEditor);
+
+// Post photo upload via ImgBB
+const postPhotoFile = $('post-photo-file');
+const postPhotoUrlInput = $('post-photo-url');
+const postUploadPrev = $('postUploadPreview');
+
+if (postPhotoFile) {
+    postPhotoFile.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 2 * 1024 * 1024) {
+            toast('\u062d\u062c\u0645 \u0627\u0644\u0635\u0648\u0631\u0629 \u064a\u062c\u0628 \u0623\u0646 \u0644\u0627 \u064a\u062a\u062c\u0627\u0648\u0632 2MB', 'error');
+            postPhotoFile.value = '';
+            return;
+        }
+        const stat = $('post-editor-status');
+        if (stat) stat.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u0631\u0641\u0639 \u0644\u0640 ImgBB...';
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+            const API_KEY = '32df4936095e9a78d4d831546cb9a355';
+            const res = await fetch(`https://api.imgbb.com/1/upload?key=${API_KEY}`, { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data && data.success) {
+                const directUrl = data.data.url;
+                if (postPhotoUrlInput) postPhotoUrlInput.value = directUrl;
+                if (postUploadPrev) {
+                    const img = document.createElement('img');
+                    img.src = _safeURL(directUrl);
+                    postUploadPrev.replaceChildren(img);
+                }
+                if (stat) { stat.textContent = '\u062a\u0645 \u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631\u0629 \u0628\u0646\u062c\u0627\u062d!'; setTimeout(() => { stat.textContent = ''; }, 2000); }
+            } else {
+                throw new Error(data.error?.message || '\u0641\u0634\u0644 \u0627\u0644\u0631\u0641\u0639');
+            }
+        } catch (err) {
+            console.error('Upload Error:', err);
+            if (stat) stat.textContent = '\u062e\u0637\u0623 \u0641\u064a \u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631\u0629.';
+            toast('\u062a\u0639\u0630\u0631 \u0631\u0641\u0639 \u0627\u0644\u0635\u0648\u0631\u0629.', 'error');
+        } finally {
+            postPhotoFile.value = '';
+        }
+    });
+}
+
+if ($('postForm')) {
+    $('postForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const stat = $('post-editor-status');
+        const btn = e.target.querySelector('button[type="submit"]');
+        const title = $('post-title').value.trim();
+        const desc = $('post-desc').value.trim();
+        const link = $('post-link').value.trim();
+        const pUrl = $('post-photo-url').value.trim();
+        const authorType = $('post-author-type').value;
+        const authorId = authorType === 'member' ? $('post-author-id').value : null;
+        const order = parseInt($('post-order').value, 10) || 0;
+        const id = $('post-id').value;
+
+        if (title.length < 2) {
+            if (stat) stat.textContent = '\u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u064a\u062c\u0628 \u0623\u0646 \u064a\u0643\u0648\u0646 \u062d\u0631\u0641\u064a\u0646 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644.';
+            return;
+        }
+
+        const payload = {
+            title,
+            description: desc,
+            externalLink: _safeURLOrNull(link) || '',
+            photoUrl: _safeURLOrNull(pUrl) || '',
+            authorType,
+            authorId: authorId || '',
+            order,
+            updatedAt: new Date().toISOString()
+        };
+
+        try {
+            if (stat) stat.textContent = '\u062c\u0627\u0631\u064a \u0627\u0644\u062d\u0641\u0638...';
+            btn.disabled = true;
+            if (id) {
+                await updateDoc(doc(db, 'posts', id), payload);
+                toast('\u062a\u0645 \u0627\u0644\u062a\u0639\u062f\u064a\u0644 \u0628\u0646\u062c\u0627\u062d', 'success');
+                logActivity('edit', `Updated post: ${title}`);
+            } else {
+                payload.createdAt = new Date().toISOString();
+                await addDoc(collection(db, 'posts'), payload);
+                toast('\u062a\u0645\u062a \u0627\u0644\u0625\u0636\u0627\u0641\u0629 \u0628\u0646\u062c\u0627\u062d', 'success');
+                logActivity('add', `Created post: ${title}`);
+            }
+            closePostEditor();
+            await loadPosts();
+            renderPostsList();
+        } catch (err) {
+            console.error(err);
+            if (stat) stat.textContent = '\u062d\u062f\u062b \u062e\u0637\u0623: ' + err.message;
+        } finally {
+            btn.disabled = false;
+        }
+    });
+}
+
+async function deletePost(id, title) {
+    if (!confirm('\u0647\u0644 \u0623\u0646\u062a \u0645\u062a\u0623\u0643\u062f \u0645\u0646 \u062d\u0630\u0641 \u0627\u0644\u0645\u0646\u0634\u0648\u0631 "' + title + '"\u061f \u0644\u0627 \u064a\u0645\u0643\u0646 \u0627\u0644\u062a\u0631\u0627\u062c\u0639 \u0639\u0646 \u0647\u0630\u0627.')) return;
+    try {
+        await deleteDoc(doc(db, 'posts', id));
+        toast('\u062a\u0645 \u0627\u0644\u062d\u0630\u0641', 'success');
+        logActivity('delete', `Deleted post: ${title}`);
+        await loadPosts();
+        renderPostsList();
+    } catch (err) {
+        console.error(err);
+        toast('\u062a\u0639\u0630\u0631 \u0627\u0644\u062d\u0630\u0641', 'error');
+    }
+}
+

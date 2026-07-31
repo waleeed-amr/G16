@@ -6,25 +6,13 @@
     <meta name="robots" content="noindex, nofollow">
     <title>SYS_ROOT // DASHBOARD</title>
 
-    <!--
-        Defense in depth CSP for the admin gate. Note:
-        - The gate itself is hidden behind Firebase Auth + Firestore role check.
-        - No 'unsafe-inline' for scripts; we add a hash for the one inline <script>.
-    -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.googleapis.com https://*.gstatic.com; script-src 'self' 'unsafe-inline' https://*.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: blob:; connect-src 'self' https://*.googleapis.com https://*.gstatic.com https://identitytoolkit.googleapis.com https://firebasestorage.googleapis.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests;">
-    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), interest-cohort=()">
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <!-- Self-hosted (no CDN runtime dependency) -->
-    <link rel="stylesheet" href="js/vendor/phosphor/phosphor.css">
-    <script src="js/vendor/dompurify.min.js" defer></script>
-    <script src="js/vendor/sortable.min.js" defer></script>
-    <script src="js/security.js" defer></script>
+    <!-- Use CDN since local vendor files are missing -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js" defer></script>
 
     <link rel="stylesheet" href="styles/admin.css">
 
@@ -94,50 +82,35 @@
     <div id="dashboard-container" class="dashboard" style="display: none;">
 
         <!-- SIDEBAR -->
-        <aside class="sidebar glass" aria-label="Dashboard navigation">
-            <div class="sidebar-brand">
-                <div class="brand-icon" aria-hidden="true"><i class="ph-fill ph-shield-check"></i></div>
-                <div>
-                    <div class="brand-name">ATI <span class="accent">SECURE</span></div>
-                    <div class="brand-sub">SYS_ROOT</div>
-                </div>
+        <aside class="sidebar" aria-label="Dashboard navigation">
+            <div class="sidebar-header">
+                <i class="ph-fill ph-shield-check" aria-hidden="true"></i>
+                <span>Admin Panel</span>
             </div>
 
             <nav class="sidebar-nav">
                 <a href="#" class="nav-item active" data-tab="overview">
                     <i class="ph ph-squares-four" aria-hidden="true"></i>
-                    <span>Overview</span>
+                    <span>نظرة عامة</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="team">
                     <i class="ph ph-users-three" aria-hidden="true"></i>
-                    <span>Operatives</span>
-                    <span class="badge" id="teamBadge" aria-label="Operatives count">0</span>
+                    <span>أعضاء الفريق</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="posts">
+                    <i class="ph ph-article" aria-hidden="true"></i>
+                    <span>المشاريع والمنشورات</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="settings">
                     <i class="ph ph-faders" aria-hidden="true"></i>
-                    <span>Site Config</span>
-                </a>
-                <a href="#" class="nav-item" data-tab="preview">
-                    <i class="ph ph-eye" aria-hidden="true"></i>
-                    <span>Live Preview</span>
-                </a>
-                <a href="#" class="nav-item" data-tab="activity">
-                    <i class="ph ph-activity" aria-hidden="true"></i>
-                    <span>Activity Log</span>
+                    <span>إعدادات الموقع</span>
                 </a>
             </nav>
 
             <div class="sidebar-footer">
-                <div class="admin-user">
-                    <div class="admin-avatar" aria-hidden="true"><i class="ph-fill ph-user"></i></div>
-                    <div class="admin-info">
-                        <div class="admin-name" id="adminEmail">SYS_ADMIN</div>
-                        <div class="admin-role">ROOT ACCESS</div>
-                    </div>
-                </div>
-                <button id="logout-btn" class="btn btn-ghost btn-block" type="button">
-                    <i class="ph ph-power" aria-hidden="true"></i>
-                    <span>DISCONNECT</span>
+                <button id="logout-btn" class="btn btn-ghost" type="button" style="width:100%; justify-content:center;">
+                    <i class="ph ph-sign-out" aria-hidden="true"></i>
+                    <span>تسجيل خروج</span>
                 </button>
             </div>
         </aside>
@@ -170,8 +143,8 @@
             <!-- TAB: OVERVIEW -->
             <section class="tab-content active" data-tab="overview" aria-labelledby="topbarTitle">
                 <div class="page-header">
-                    <h1>Mission Control</h1>
-                    <p>Real-time snapshot of the deployed site</p>
+                    <h1>نظرة عامة</h1>
+                    <p>إحصائيات مباشرة للموقع</p>
                 </div>
 
                 <div class="metric-grid">
@@ -245,8 +218,8 @@
             <!-- TAB: TEAM -->
             <section class="tab-content" data-tab="team" aria-labelledby="topbarTitle">
                 <div class="page-header">
-                    <h1>Operatives Management</h1>
-                    <p>Add, edit, reorder and remove team members</p>
+                    <h1>إدارة الفريق</h1>
+                    <p>إضافة، تعديل، إزالة أعضاء الفريق</p>
                 </div>
 
                 <div class="team-toolbar">
@@ -303,6 +276,10 @@
                                     <label for="site-download-url">Report Download URL</label>
                                     <input type="url" id="site-download-url" placeholder="https://..." maxlength="1000">
                                 </div>
+                                <div class="field full">
+                                    <label for="site-report-pages">Report Pages Count</label>
+                                    <input type="number" id="site-report-pages" placeholder="47" min="0" max="10000">
+                                </div>
                             </div>
                             <div class="form-actions">
                                 <button type="submit" class="btn btn-primary">
@@ -310,21 +287,8 @@
                                     <span>Update Config</span>
                                 </button>
                                 <button type="button" class="btn btn-ghost" id="resetSettings">
-                                    <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
-                                    <span>Reset</span>
-                                </button>
-                                <span id="settings-status" class="status-msg" role="status" aria-live="polite"></span>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </section>
-
-            <!-- TAB: PREVIEW -->
-            <section class="tab-content" data-tab="preview" aria-labelledby="topbarTitle">
-                <div class="page-header">
-                    <h1>Live Preview</h1>
-                    <p>See how the public site looks right now</p>
+                    <h1>إعدادات الموقع</h1>
+                    <p>إعدادات النظام العامة</p>
                 </div>
                 <div class="preview-frame-wrap glass">
                     <div class="preview-bar">
@@ -342,36 +306,18 @@
                 </div>
             </section>
 
-            <!-- TAB: ACTIVITY -->
-            <section class="tab-content" data-tab="activity" aria-labelledby="topbarTitle">
-                <div class="page-header">
-                    <h1>Activity Log</h1>
-                    <p>Recent actions on this session</p>
-                </div>
-                <div class="panel glass">
-                    <div class="panel-body">
-                        <div class="activity-list" id="activityList" aria-live="polite">
-                            <div class="empty-state">
-                                <i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>
-                                <span>No activity yet</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </section>
-
         </main>
     </div>
 
     <!-- MEMBER EDITOR MODAL -->
     <div class="modal-backdrop" id="memberEditor" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="editorTitle" aria-hidden="true">
-        <div class="modal modal-wide glass-strong">
-            <button class="modal-close" type="button" data-close-editor aria-label="Close">
-                <i class="ph ph-x" aria-hidden="true"></i>
-            </button>
+        <div class="modal-card">
             <div class="modal-header">
-                <h2 id="editorTitle">Add Operative</h2>
-                <p>Fill in the operative's details</p>
+                <h2 id="editorTitle">إضافة عضو</h2>
+                <button class="modal-close" type="button" data-close-editor aria-label="Close">
+                    <i class="ph ph-x" aria-hidden="true"></i>
+                </button>
             </div>
             <form id="memberForm" class="modal-body" novalidate>
                 <input type="hidden" id="member-id">
@@ -421,23 +367,100 @@
                         <textarea id="member-contributions" rows="2" placeholder="What did this operative work on?" maxlength="2000"></textarea>
                     </div>
                 </div>
-                <div class="form-actions">
+                        <label for="member-order">Order</label>
+                        <input type="number" id="member-order" min="0" max="999" value="0">
+                        <span class="help-text">0 is first</span>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <span id="editor-status" class="status-msg" role="status" aria-live="polite"></span>
+                    <button type="button" class="btn btn-ghost" data-close-editor>إلغاء</button>
                     <button type="submit" class="btn btn-primary">
-                        <i class="ph ph-check-circle" aria-hidden="true"></i>
-                        <span>Save Operative</span>
-                    </button>
-                    <button type="button" class="btn btn-ghost" data-close-editor>
-                        <i class="ph ph-x" aria-hidden="true"></i>
-                        <span>Cancel</span>
+                        <i class="ph ph-check" aria-hidden="true"></i> حفظ العضو
                     </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- TOAST CONTAINER -->
-    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="false"></div>
+    <!-- POST EDITOR MODAL -->
+    <div class="modal-backdrop" id="postEditor" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="postEditorTitle" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 id="postEditorTitle">إضافة منشور</h2>
+                <button class="modal-close" type="button" id="closePostEditor" aria-label="Close">
+                    <i class="ph ph-x" aria-hidden="true"></i>
+                </button>
+            </div>
+            <form id="postForm" class="modal-body" novalidate>
+                <input type="hidden" id="post-id">
+                
+                <div class="form-group">
+                    <label for="post-title">العنوان *</label>
+                    <input type="text" id="post-title" required minlength="2" maxlength="200" placeholder="مثال: التصميم النهائي للمشروع">
+                </div>
+                
+                <div class="form-group">
+                    <label for="post-desc">الوصف</label>
+                    <textarea id="post-desc" rows="4" maxlength="2000" placeholder="تفاصيل المشروع..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>صورة المشروع</label>
+                    <div class="photo-upload-wrap">
+                        <div class="photo-preview" id="postUploadPreview" aria-hidden="true">
+                            <i class="ph ph-image"></i>
+                        </div>
+                        <div class="upload-controls">
+                            <input type="file" id="post-photo-file" accept="image/png,image/jpeg,image/webp,image/gif">
+                            <input type="url" id="post-photo-url" placeholder="أو ضع رابط الصورة هنا" maxlength="1000">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label for="post-author-type">صاحب العمل</label>
+                        <select id="post-author-type">
+                            <option value="team">الفريق بأكمله</option>
+                            <option value="member">عضو محدد</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="post-member-select-group" style="display:none;">
+                        <label for="post-author-id">اختر العضو</label>
+                        <select id="post-author-id">
+                            <!-- Populated via JS -->
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label for="post-link">رابط خارجي (للعرض/التحميل)</label>
+                        <input type="url" id="post-link" maxlength="1000" placeholder="https://...">
+                    </div>
+                    <div class="form-group">
+                        <label for="post-order">الترتيب</label>
+                        <input type="number" id="post-order" min="0" max="999" value="0">
+                        <span class="help-text">الأقل يظهر أولاً</span>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <span id="post-editor-status" class="status-msg" role="status" aria-live="polite"></span>
+                    <button type="button" class="btn btn-ghost" id="cancelPostEditor">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ph ph-check" aria-hidden="true"></i> حفظ المنشور
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-    <script type="module" src="js/admin.js"></script>
+    <!-- TOASTS -->
+    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+    <script type="module" src="./js/admin.js"></script>
 </body>
 </html>
