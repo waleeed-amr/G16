@@ -67,6 +67,11 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Only handle http(s) — chrome-extension://, file://, data:, etc. would
+  // throw "Request scheme X is unsupported" in the Cache API. The browser
+  // will fall through to its normal handler for those.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
   // Firebase / API requests: Network only
   if (url.hostname.includes('firebase') || url.hostname.includes('googleapis')) {
     event.respondWith(fetch(request).catch(() => {
@@ -82,9 +87,11 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then((cached) => {
       if (cached) return cached;
       return fetch(request).then((response) => {
-        if (response.status === 200 && request.method === 'GET') {
+        // Only cache successful basic responses — no opaque cross-origin
+        // responses (they break cache.put).
+        if (response && response.status === 200 && response.type === 'basic' && request.method === 'GET') {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone)).catch(() => {});
         }
         return response;
       });

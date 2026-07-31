@@ -4,7 +4,8 @@
 //   All user content is rendered via textContent.
 //   No innerHTML interpolation of untrusted strings.
 // ==========================================================
-import { db } from './firebase-config.js';
+// ?v=3 forces the browser to bypass the HTTP cache and refetch.
+import { db } from './firebase-config.js?v=3';
 
 // --- ADVANCED UTILS (Network Resilience & Perf) ---
 const withRetry = async (fn, retries = 3, delay = 1500) => {

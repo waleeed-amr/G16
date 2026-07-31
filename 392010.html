@@ -53,6 +53,7 @@
             <div class="login-footer">
                 <span class="status-dot" aria-hidden="true"></span>
                 <span>اتصال مشفر</span>
+                <span style="margin-inline-start:1rem; opacity:0.6; font-size:0.78rem;">v2.1</span>
             </div>
         </div>
     </div>
@@ -113,6 +114,9 @@
                     </div>
                 </div>
                 <div class="topbar-right">
+                    <button class="btn-icon" id="forceUpdateBtn" type="button" title="إجبار تحديث الكاش (لو شايف errors غريبة)" aria-label="Force cache update">
+                        <i class="ph ph-broom" aria-hidden="true"></i>
+                    </button>
                     <button class="btn-icon" id="refreshBtn" type="button" title="Refresh data" aria-label="Refresh data">
                         <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
                     </button>
@@ -492,24 +496,22 @@
     <!-- TOASTS -->
     <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
-    <script type="module" src="./admin.js"></script>
+    <script type="module" src="./admin.js?v=3"></script>
     <script>
-        // Register service worker on the admin page too — this is what guarantees
-        // the latest admin.js is loaded even when the user lands on /392010.html
-        // directly (bypassing index.html). Without this, a stale admin.js
-        // version can be served from the HTTP cache and crash initDashboard.
+        // Register service worker on the admin page too — see note in index.html.
+        // The ?v=3 query string is critical: without it the browser serves the
+        // old sw.js from its HTTP cache, the old sw.js installs CACHE_NAME v2,
+        // and the user is stuck on the broken admin.js forever.
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
+                navigator.serviceWorker.register('./sw.js?v=3')
                     .then(reg => {
-                        // If a new SW is already waiting, tell it to take over NOW.
                         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
                         reg.addEventListener('updatefound', () => {
                             const sw = reg.installing;
                             if (!sw) return;
                             sw.addEventListener('statechange', () => {
                                 if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // New version available — force-activate.
                                     sw.postMessage({ type: 'SKIP_WAITING' });
                                 }
                             });

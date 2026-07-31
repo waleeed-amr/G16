@@ -18,6 +18,9 @@
 
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
+    <!-- Inline SVG favicon (data URI) — no extra file, no 404. The shield icon
+         matches the project theme. -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%2300f2fe%22/%3E%3Cstop offset=%221%22 stop-color=%22%23fe3c6c%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%231a1a2e%22/%3E%3Cpath d=%22M50 18 L78 28 V52 C78 68 65 80 50 84 C35 80 22 68 22 52 V28 Z%22 fill=%22url(%23g)%22 stroke=%22%23fff%22 stroke-width=%222%22 stroke-linejoin=%22round%22/%3E%3Cpath d=%22M38 52 L46 60 L62 42%22 fill=%22none%22 stroke=%22%23fff%22 stroke-width=%225%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="G16 NTI">
@@ -285,14 +288,18 @@
         <i class="ph-bold ph-arrow-up" aria-hidden="true"></i>
     </button>
 
-    <script type="module" src="./main.js"></script>
+    <script type="module" src="./main.js?v=3"></script>
     <script>
-        // Register Service Worker
+        // Register Service Worker.
+        // NOTE: The ?v=3 query string is critical — without it, the browser
+        // serves the OLD sw.js from its HTTP cache, the OLD sw.js installs
+        // CACHE_NAME = 'g16-nti-v2', and the user is stuck on the broken
+        // admin.js forever. The query string makes the browser see a
+        // different URL and re-fetch from the network.
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
+                navigator.serviceWorker.register('./sw.js?v=3')
                     .then(reg => {
-                        // If a new SW is already waiting, tell it to take over NOW.
                         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
                         reg.addEventListener('updatefound', () => {
                             const sw = reg.installing;

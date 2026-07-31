@@ -2,7 +2,10 @@
 //   NTI SECURE — Admin Dashboard Logic v2.0
 //   Firebase Storage · Activity Log · Charts · Backup/Restore
 // ==========================================================
-import { app, db, auth, storage } from './firebase-config.js';
+// ?v=3 forces the browser to bypass the HTTP cache and refetch. Critical:
+// if your browser is serving a stale admin.js that calls initSettingsForm(),
+// that's the cause of the ReferenceError you're seeing in the console.
+import { app, db, auth, storage } from './firebase-config.js?v=3';
 import {
     signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
@@ -1464,3 +1467,41 @@ document.addEventListener('keydown', (e) => {
 
 // Wire the keyboard icon in the topbar
 document.getElementById('shortcutsBtn')?.addEventListener('click', showShortcutsModal);
+
+// ============================================================
+//   FORCE UPDATE — nuke the service worker + cache and reload.
+//
+// Why: even with ?v=3 in the SW URL, some browsers (especially when the
+// page is opened in DevTools "Disable cache" OFF, or behind a corporate
+// proxy) serve the OLD sw.js from the HTTP cache. The OLD sw.js then
+// installs CACHE_NAME v2 and serves the OLD admin.js. This button is the
+// last-resort way for the admin to clear the slate without opening
+// DevTools. One click does:
+//   1. Unregister the service worker
+//   2. Delete every cache
+//   3. Hard-reload the page
+// ============================================================
+async function forceUpdate() {
+    try {
+        if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map((r) => r.unregister()));
+        }
+        if ('caches' in window) {
+            const names = await caches.keys();
+            await Promise.all(names.map((n) => caches.delete(n)));
+        }
+        toast('تم تفريغ الكاش — جاري إعادة التحميل...', 'success', 2000);
+    } catch (err) {
+        console.error('[forceUpdate] error:', err);
+        toast('فشل التحديث: ' + (err?.message || err), 'error');
+    } finally {
+        // Cache: 'reload' + a fresh URL forces a full network fetch.
+        setTimeout(() => {
+            const url = new URL(window.location.href);
+            url.searchParams.set('_t', Date.now().toString());
+            window.location.replace(url.toString());
+        }, 600);
+    }
+}
+document.getElementById('forceUpdateBtn')?.addEventListener('click', forceUpdate);
