@@ -1,7 +1,7 @@
-// CACHE bumped to v4 — looser rules, fixes add-member button, opens quick-
-// action modals directly. If your browser is still on v2, hit the broom
-// icon in the topbar (or Application → Service Workers → Unregister) and reload.
-const CACHE_NAME = 'g16-nti-v4';
+// CACHE bumped to v5 — new 'Resources' feature: admin can add/manage
+// external file/report links, and the main site's "Files and Reports"
+// section now renders dynamically from the `resources` collection.
+const CACHE_NAME = 'g16-nti-v5';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -12,7 +12,8 @@ const STATIC_ASSETS = [
   './admin.css',
   './admin.js',
   './firestore.rules',
-  './manifest.json'
+  './manifest.json',
+  './ADMIN.md'
 ];
 
 // Install: Cache static assets (best-effort; don't block on optional files)

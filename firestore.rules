@@ -8,8 +8,8 @@ service cloud.firestore {
     // ============================================================
     // These rules are deliberately LOOSE because the project is being
     // submitted in <1 hour and we can't afford any "permission-denied"
-    // surprises during the live demo. Any authenticated user can read
-    // and write every document in the database.
+    // surprises during the live demo. Visitors can read public content
+    // without logging in; any authenticated user can write everything.
     //
     // 🚨 SECURITY WARNING — DO NOT KEEP THESE RULES IN PRODUCTION 🚨
     //
@@ -17,6 +17,14 @@ service cloud.firestore {
     // this whole block with the contents of `firestore.rules.strict`
     // (see ADMIN.md for the migration steps).
     // ============================================================
+
+    // Public reads for the content visitors see on the main site.
+    match /team/{memberId} { allow read: if true; }
+    match /posts/{postId} { allow read: if true; }
+    match /resources/{resourceId} { allow read: if true; }
+    match /settings/{document=**} { allow read: if true; }
+
+    // Authenticated writes everywhere (admin, team editor, etc.).
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

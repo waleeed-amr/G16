@@ -4,8 +4,8 @@
 //   All user content is rendered via textContent.
 //   No innerHTML interpolation of untrusted strings.
 // ==========================================================
-// ?v=4 forces the browser to bypass the HTTP cache and refetch.
-import { db } from './firebase-config.js?v=4';
+// ?v=5 forces the browser to bypass the HTTP cache and refetch.
+import { db } from './firebase-config.js?v=5';
 
 // --- ADVANCED UTILS (Network Resilience & Perf) ---
 const withRetry = async (fn, retries = 3, delay = 1500) => {
@@ -51,6 +51,7 @@ const _focusTrap = focusTrap || (() => () => {});
 const state = {
     team: [],
     posts: [],
+    resources: [],
     feed: [],
     filter: '',
     isRevealed: new WeakSet(),
@@ -221,9 +222,6 @@ async function loadSiteData() {
     const heroTitle = document.getElementById('hero-title');
     const heroDesc = document.getElementById('hero-desc');
     const seoTitle = document.getElementById('seo-title');
-    const masterPresLink = document.getElementById('master-pres-link');
-    const reportPreviewLink = document.getElementById('report-preview-link');
-    const reportDownloadLink = document.getElementById('report-download-link');
     const teamGrid = document.getElementById('team-grid');
 
     try {
@@ -238,20 +236,6 @@ async function loadSiteData() {
             }
             if (seoTitle) seoTitle.textContent = title;
             if (heroDesc) heroDesc.textContent = desc;
-
-            const setLinkHref = (el, url) => {
-                if (!el) return;
-                const safe = _safeURLOrNull(url);
-                if (safe) {
-                    el.href = safe;
-                    el.style.display = 'inline-flex';
-                } else {
-                    el.style.display = 'none';
-                }
-            };
-            setLinkHref(masterPresLink, data.masterPresentationUrl);
-            setLinkHref(reportPreviewLink, data.reportPreviewUrl);
-            setLinkHref(reportDownloadLink, data.reportUrl);
         } else {
             if (heroTitle) heroTitle.textContent = 'لا توجد بيانات';
             if (heroDesc) heroDesc.textContent = 'يرجى ضبط إعدادات الموقع من لوحة التحكم.';
@@ -265,6 +249,53 @@ async function loadSiteData() {
         state.posts = [];
         postsSnap.forEach(d => state.posts.push({ id: d.id, type: 'post', ...d.data() }));
 
+        // Resources collection — drives the "Files and Reports" section.
+        // Fallback to settings.masterPresentationUrl / reportPreviewUrl / reportUrl
+        // so the original two hardcoded cards still work if no `resources` exist yet.
+        let resourcesSnap;
+        try {
+            resourcesSnap = await withRetry(() => getDocs(query(collection(db, "resources"), orderBy("order", "asc"))));
+        } catch (e) {
+            // Permission-denied for unauthenticated users is expected in strict mode,
+            // but our rules are loose so this should not happen. Just empty fallback.
+            console.warn('[loadSiteData] resources fetch failed (continuing with empty):', e?.message);
+            resourcesSnap = { forEach: () => {} };
+        }
+        state.resources = [];
+        resourcesSnap.forEach(d => state.resources.push({ id: d.id, ...d.data() }));
+
+        // If admin hasn't added any resources yet, fall back to the legacy
+        // settings fields so the existing Master Presentation / Final Report
+        // cards still appear (with their old behavior — show-if-URL-exists).
+        if (!state.resources.length) {
+            const s = settingsSnap.exists() ? settingsSnap.data() : {};
+            if (s.masterPresentationUrl) {
+                state.resources.push({
+                    id: '__legacy_master',
+                    title: 'Master Presentation',
+                    description: 'البريزنتيشن المجمع لكل أعضاء الفريق',
+                    url: s.masterPresentationUrl,
+                    icon: 'ph-presentation-chart',
+                    type: 'presentation',
+                    order: 0
+                });
+            }
+            if (s.reportUrl || s.reportPreviewUrl) {
+                state.resources.push({
+                    id: '__legacy_report',
+                    title: 'Final Report',
+                    description: 'التقرير النهائي الشامل (47 صفحة)',
+                    url: s.reportUrl || s.reportPreviewUrl,
+                    icon: 'ph-file-pdf',
+                    type: 'report',
+                    order: 1,
+                    highlight: true
+                });
+            }
+        }
+
+        renderResources();
+
         state.feed = [...state.team, ...state.posts].sort((a, b) => (a.order || 0) - (b.order || 0));
 
         // Update stats
@@ -275,7 +306,7 @@ async function loadSiteData() {
         if (statPosts) statPosts.dataset.counter = state.posts.length;
 
         initCounters(); // Re-trigger the counter animation with the actual values
-        
+
         renderFeed();
     } catch (err) {
         console.error("Firebase Error:", err);
@@ -291,6 +322,114 @@ async function loadSiteData() {
             teamGrid.appendChild(empty);
         }
     }
+}
+
+// ----------------------------------------------------------
+//  RESOURCES RENDER  (XSS-safe: textContent everywhere)
+// ----------------------------------------------------------
+function renderResources() {
+    const list = document.getElementById('resources-list');
+    if (!list) return;
+    list.replaceChildren();
+
+    if (!state.resources.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        const ic = document.createElement('i'); ic.className = 'ph ph-folder-open';
+        const span = document.createElement('span'); span.textContent = 'لا توجد ملفات بعد — أضف من لوحة التحكم';
+        empty.appendChild(ic); empty.appendChild(span);
+        list.appendChild(empty);
+        return;
+    }
+
+    const sorted = [...state.resources].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    const frag = document.createDocumentFragment();
+    sorted.forEach(r => {
+        const safeUrl = _safeURLOrNull(r.url);
+        if (!safeUrl) return; // skip entries with no usable URL
+        frag.appendChild(buildResourceCard({ ...r, _safeUrl: safeUrl }));
+    });
+    list.appendChild(frag);
+}
+
+function buildResourceCard(r) {
+    const card = document.createElement('div');
+    card.className = 'report-card' + (r.highlight ? ' highlight' : '');
+    card.setAttribute('role', 'article');
+
+    // Icon
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'card-icon';
+    const icon = document.createElement('i');
+    // r.icon may be a phosphor class like "ph-file-pdf" (without the "ph-fill" prefix).
+    // If it already contains "ph-", use it; otherwise default to ph-link.
+    const iconClass = r.icon && r.icon.startsWith('ph-') ? `ph-fill ${r.icon}` : 'ph-fill ph-link';
+    icon.className = iconClass;
+    icon.setAttribute('aria-hidden', 'true');
+    iconWrap.appendChild(icon);
+
+    // Content
+    const content = document.createElement('div');
+    content.className = 'card-content';
+    const h3 = document.createElement('h3');
+    h3.textContent = r.title || 'بدون عنوان';
+    const p = document.createElement('p');
+    p.textContent = r.description || '';
+    content.appendChild(h3);
+    if (r.description) content.appendChild(p);
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'card-actions';
+    // Primary action button
+    const a = document.createElement('a');
+    a.href = r._safeUrl;
+    a.className = 'btn btn-action' + (r.highlight ? ' primary' : '');
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = r.type === 'report' ? 'قراءة' : r.type === 'presentation' ? 'فتح' : r.type === 'file' ? 'تحميل' : 'فتح';
+    actions.appendChild(a);
+
+    // Copy-link button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn btn-icon-only copy-link';
+    copyBtn.type = 'button';
+    copyBtn.setAttribute('aria-label', 'نسخ الرابط');
+    copyBtn.dataset.copyUrl = r._safeUrl;
+    const copyIcon = document.createElement('i');
+    copyIcon.className = 'ph ph-copy';
+    copyBtn.appendChild(copyIcon);
+    actions.appendChild(copyBtn);
+
+    card.appendChild(iconWrap);
+    card.appendChild(content);
+    card.appendChild(actions);
+    return card;
+}
+
+// ----------------------------------------------------------
+//  COPY-LINK HANDLER (event delegation on the resources list)
+// ----------------------------------------------------------
+function initCopyLinks() {
+    const list = document.getElementById('resources-list');
+    if (!list) return;
+    list.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.copy-link');
+        if (!btn) return;
+        const url = btn.dataset.copyUrl;
+        if (!url) return;
+        try {
+            await navigator.clipboard.writeText(url);
+            const icon = btn.querySelector('i');
+            if (icon) {
+                const orig = icon.className;
+                icon.className = 'ph ph-check';
+                setTimeout(() => { icon.className = orig; }, 1500);
+            }
+        } catch (_) {
+            prompt('انسخ الرابط:', url);
+        }
+    });
 }
 
 // ----------------------------------------------------------
@@ -650,6 +789,7 @@ async function init() {
     initCounters();
     initScrollSpy();
     initBackToTop();
+    initCopyLinks();
 
     await loadSiteData().catch(() => {});
 }

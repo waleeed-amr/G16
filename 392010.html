@@ -83,6 +83,10 @@
                     <i class="ph ph-article" aria-hidden="true"></i>
                     <span>المشاريع والمنشورات</span>
                 </a>
+                <a href="#" class="nav-item" data-tab="resources">
+                    <i class="ph ph-link" aria-hidden="true"></i>
+                    <span>الملفات والروابط</span>
+                </a>
                 <a href="#" class="nav-item" data-tab="activity">
                     <i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>
                     <span>سجل النشاط</span>
@@ -198,13 +202,13 @@
                                         <i class="ph ph-article" aria-hidden="true"></i>
                                         <span>إضافة منشور</span>
                                     </button>
+                                    <button type="button" class="qa-btn" data-jump="resources">
+                                        <i class="ph ph-link" aria-hidden="true"></i>
+                                        <span>إضافة رابط</span>
+                                    </button>
                                     <button type="button" class="qa-btn" data-jump="settings">
                                         <i class="ph ph-sliders" aria-hidden="true"></i>
                                         <span>الإعدادات</span>
-                                    </button>
-                                    <button type="button" class="qa-btn" id="qaExport">
-                                        <i class="ph ph-download-simple" aria-hidden="true"></i>
-                                        <span>تصدير البيانات</span>
                                     </button>
                                 </div>
                             </div>
@@ -267,6 +271,38 @@
                         </div>
                         <div class="panel-body">
                             <div class="posts-list" id="adminPostsList" aria-live="polite">
+                                <div class="empty-state" role="status">
+                                    <i class="ph ph-spinner-gap ph-spin" aria-hidden="true"></i>
+                                    <span>جاري التحميل...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB: RESOURCES -->
+                <section class="tab-content" data-tab="resources">
+                    <div class="page-header">
+                        <div>
+                            <h1>الملفات والروابط</h1>
+                            <p>إدارة الملفات والتقارير والروابط الخارجية المعروضة في الموقع</p>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="addResourceBtn">
+                            <i class="ph ph-link" aria-hidden="true"></i>
+                            <span>إضافة رابط جديد</span>
+                        </button>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-link" aria-hidden="true"></i> الروابط</h3>
+                            <div class="search-input" style="max-width:280px;">
+                                <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+                                <input type="text" id="adminResourcesSearch" placeholder="ابحث في الروابط..." autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="resources-list" id="adminResourcesList" aria-live="polite">
                                 <div class="empty-state" role="status">
                                     <i class="ph ph-spinner-gap ph-spin" aria-hidden="true"></i>
                                     <span>جاري التحميل...</span>
@@ -495,18 +531,96 @@
         </div>
     </div>
 
+    <!-- RESOURCE EDITOR MODAL -->
+    <div class="modal-backdrop" id="resourceEditor" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="resourceEditorTitle" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 id="resourceEditorTitle">إضافة رابط</h2>
+                <button class="modal-close" type="button" data-close-resource-editor aria-label="إغلاق">
+                    <i class="ph ph-x" aria-hidden="true"></i>
+                </button>
+            </div>
+            <form id="resourceForm" class="modal-body" novalidate>
+                <input type="hidden" id="resource-id">
+
+                <div class="form-group">
+                    <label for="resource-title">العنوان *</label>
+                    <input type="text" id="resource-title" required minlength="2" maxlength="200" placeholder="مثال: التقرير النهائي">
+                </div>
+
+                <div class="form-group">
+                    <label for="resource-desc">الوصف</label>
+                    <textarea id="resource-desc" rows="2" maxlength="500" placeholder="وصف مختصر للملف أو الرابط..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="resource-url">الرابط الخارجي *</label>
+                    <input type="url" id="resource-url" required placeholder="https://drive.google.com/..." maxlength="1000">
+                    <span class="help-text">Google Drive، Dropbox، GitHub، أي رابط عام</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="resource-type">النوع</label>
+                    <select id="resource-type">
+                        <option value="report">📄 تقرير</option>
+                        <option value="presentation">📊 عرض تقديمي</option>
+                        <option value="file">📁 ملف</option>
+                        <option value="link">🔗 رابط خارجي</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="resource-icon">الأيقونة (اختياري)</label>
+                    <select id="resource-icon">
+                        <option value="ph-file-pdf">📄 PDF (أحمر)</option>
+                        <option value="ph-presentation-chart">📊 عرض تقديمي</option>
+                        <option value="ph-folder-open">📁 مجلد</option>
+                        <option value="ph-file-text">📝 مستند</option>
+                        <option value="ph-link">🔗 رابط</option>
+                        <option value="ph-github-logo">🐙 GitHub</option>
+                        <option value="ph-cloud">☁️ كلاود</option>
+                        <option value="ph-video">🎥 فيديو</option>
+                        <option value="ph-image">🖼️ صورة</option>
+                        <option value="ph-code">💻 كود</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="resource-order">الترتيب</label>
+                    <input type="number" id="resource-order" min="0" max="999" value="0">
+                    <span class="help-text">الأقل يظهر أولاً</span>
+                </div>
+
+                <div class="form-group">
+                    <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+                        <input type="checkbox" id="resource-highlight" style="width:auto;">
+                        <span>تمييز (highlight) — يظهر بشكل بارز</span>
+                    </label>
+                </div>
+
+                <div class="modal-footer">
+                    <span id="resource-editor-status" class="status-msg" role="status" aria-live="polite"></span>
+                    <button type="button" class="btn btn-ghost" data-close-resource-editor>إلغاء</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ph ph-check" aria-hidden="true"></i> حفظ الرابط
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- TOASTS -->
     <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
-    <script type="module" src="./admin.js?v=4"></script>
+    <script type="module" src="./admin.js?v=5"></script>
     <script>
         // Register service worker on the admin page too — see note in index.html.
-        // The ?v=4 query string is critical: without it the browser serves the
+        // The ?v=5 query string is critical: without it the browser serves the
         // old sw.js from its HTTP cache, the old sw.js installs CACHE_NAME v2,
         // and the user is stuck on the broken admin.js forever.
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js?v=4')
+                navigator.serviceWorker.register('./sw.js?v=5')
                     .then(reg => {
                         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
                         reg.addEventListener('updatefound', () => {

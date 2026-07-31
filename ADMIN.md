@@ -93,9 +93,33 @@ G16/
 ├── main.css           # ستايل الصفحة
 ├── admin.css          # ستايل لوحة الإدارة
 ├── firebase-config.js # Firebase init
-├── firestore.rules    # صلاحيات Firestore
+├── firestore.rules    # صلاحيات Firestore (loose demo mode)
+├── firestore.rules.strict # النسخة الآمنة — استخدمها بعد التسليم
 ├── sw.js              # Service Worker
 ├── manifest.json      # PWA manifest
 ├── bootstrap-admin.cjs # سكريبت لإضافة admin من Node
+├── seed-resources.cjs  # سكريبت seed لملء collection الـ resources
 └── ADMIN.md           # هذا الملف
 ```
+
+## ميزة "الملفات والروابط" (Resources)
+
+من إصدار v2.1، قسم **"الملفات والتقارير"** في الصفحة الرئيسية مش ثابت — بيتعبّى ديناميكياً من `resources` collection في Firestore. تقدر من لوحة الأدمن (تاب "الملفات والروابط") تضيف/تعدل/تحذف أي رابط:
+
+- **العنوان** + **الوصف** + **الرابط الخارجي** (Google Drive, Dropbox, GitHub, etc.)
+- **النوع**: تقرير 📄 / عرض تقديمي 📊 / ملف 📁 / رابط خارجي 🔗
+- **الأيقونة**: اختار من 10 أيقونات (PDF أحمر، مجلد، GitHub، كلاود، فيديو، صورة، كود...)
+- **التمييز (highlight)**: لو عايز الكارت يبقى بارز زي الـ Final Report الأصلي
+- **الترتيب**: drag-and-drop أو عدّل الرقم يدوياً
+- **Bulk delete**: اختار كذا كارت مرة واحدة وامسحهم
+- **Undo**: لو مسحت غلط، عندك 6 ثواني تراجع
+
+### populate الـ resources بالكروت القديمة
+
+لو عندك URLs في `settings/site` (masterPresentationUrl, reportUrl) وعايز تنقلهم للـ resources تلقائياً:
+
+```powershell
+node seed-resources.cjs
+```
+
+(بيشتغل بنفس `service-account.json` بتاع `bootstrap-admin.cjs`.)

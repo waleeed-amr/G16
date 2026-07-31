@@ -2,10 +2,10 @@
 //   NTI SECURE — Admin Dashboard Logic v2.0
 //   Firebase Storage · Activity Log · Charts · Backup/Restore
 // ==========================================================
-// ?v=4 forces the browser to bypass the HTTP cache and refetch. Critical:
+// ?v=5 forces the browser to bypass the HTTP cache and refetch. Critical:
 // if your browser is serving a stale admin.js that calls initSettingsForm(),
 // that's the cause of the ReferenceError you're seeing in the console.
-import { app, db, auth, storage } from './firebase-config.js?v=4';
+import { app, db, auth, storage } from './firebase-config.js?v=5';
 import {
     signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
@@ -77,16 +77,20 @@ const _debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = s
 const state = {
     team: [],
     posts: [],
+    resources: [],
     settings: null,
     activity: [],
     currentTab: 'overview',
     search: '',          // team search
     postsSearch: '',     // posts search
+    resourcesSearch: '', // resources search
     selectedTeam: new Set(),
     selectedPosts: new Set(),
+    selectedResources: new Set(),
     focusTrapRelease: null,
     unsubTeam: null,
     unsubPosts: null,
+    unsubResources: null,
     unsubActivity: null
 };
 
@@ -178,6 +182,7 @@ onAuthStateChanged(auth, (user) => {
         // Unsubscribe real-time listeners
         if (state.unsubTeam) state.unsubTeam();
         if (state.unsubPosts) state.unsubPosts();
+        if (state.unsubResources) state.unsubResources();
         if (state.unsubActivity) state.unsubActivity();
     }
 });
@@ -333,6 +338,24 @@ function initRealtimeListeners() {
         }
     );
 
+    // Resources real-time (file/report links shown on the main site)
+    state.unsubResources = onSnapshot(
+        query(collection(db, 'resources'), orderBy('order', 'asc')),
+        (snap) => {
+            state.resources = [];
+            snap.forEach(d => state.resources.push({ id: d.id, ...d.data() }));
+            renderResourcesList();
+        },
+        (err) => {
+            console.error('[resources listener] error:', err);
+            if (err?.code === 'permission-denied') {
+                toast('لا توجد صلاحيات لقراءة الروابط — تأكد من admin_roles', 'error', 6000);
+            } else {
+                toast('خطأ في تحميل الروابط: ' + (err?.message || err), 'error');
+            }
+        }
+    );
+
     // Settings one-time
     loadSettings();
 }
@@ -377,6 +400,7 @@ function initTabs() {
                 overview: ['نظرة عامة', 'إحصائيات الموقع'],
                 team: ['الفريق', 'إدارة أعضاء الفريق'],
                 posts: ['المنشورات', 'إدارة المشاريع والمنشورات'],
+                resources: ['الملفات والروابط', 'إدارة الروابط الخارجية'],
                 settings: ['إعدادات', 'إعدادات الموقع'],
                 activity: ['سجل النشاط', 'آخر العمليات في النظام']
             };
@@ -393,8 +417,9 @@ function initTabs() {
             const navItem = document.querySelector(`.nav-item[data-tab="${target}"]`);
             if (navItem) navItem.click();
             // After switching to the target tab, also open the relevant editor
-            // for "team" / "posts" — much better UX than a two-step click.
-            // Using rAF ensures the tab has actually become visible first.
+            // for "team" / "posts" / "resources" — much better UX than a
+            // two-step click. Using rAF ensures the tab has actually become
+            // visible first.
             if (target === 'team') {
                 requestAnimationFrame(() => {
                     try { openEditor(); }
@@ -404,6 +429,11 @@ function initTabs() {
                 requestAnimationFrame(() => {
                     try { openPostEditor(); }
                     catch (err) { console.error('[quick-action] openPostEditor failed:', err); toast('فشل فتح النموذج: ' + err.message, 'error'); }
+                });
+            } else if (target === 'resources') {
+                requestAnimationFrame(() => {
+                    try { openResourceEditor(); }
+                    catch (err) { console.error('[quick-action] openResourceEditor failed:', err); toast('فشل فتح النموذج: ' + err.message, 'error'); }
                 });
             }
         });
@@ -1178,6 +1208,312 @@ document.getElementById('postForm')?.addEventListener('submit', async (e) => {
     }
 });
 
+// ============================================================
+//   RESOURCES  (الملفات والروابط)
+// ============================================================
+// Same CRUD pattern as team/posts: list, search, bulk-select, add/edit/delete
+// with snapshot-based Undo. Real-time listener is set up in initRealtimeListeners.
+
+function renderResourcesList() {
+    const wrap = document.getElementById('adminResourcesList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+
+    const q = (state.resourcesSearch || '').trim().toLowerCase();
+    const filtered = state.resources.filter(r => {
+        if (!q) return true;
+        return (r.title + ' ' + (r.description || '') + ' ' + (r.type || '') + ' ' + (r.url || '')).toLowerCase().includes(q);
+    });
+
+    if (!state.resources.length) {
+        wrap.innerHTML = '<div class="empty-state"><i class="ph ph-link"></i><span>لا توجد روابط - أضف الأول</span></div>';
+        return;
+    }
+
+    if (!filtered.length) {
+        wrap.innerHTML = '<div class="empty-state"><i class="ph ph-magnifying-glass"></i><span>لا توجد نتائج</span></div>';
+        return;
+    }
+
+    // Bulk bar
+    const bulkBar = document.createElement('div');
+    bulkBar.className = 'bulk-bar' + (state.selectedResources.size ? ' active' : '');
+    bulkBar.id = 'resourcesBulkBar';
+    bulkBar.innerHTML = `
+        <span>${state.selectedResources.size} محدد</span>
+        <button class="btn btn-ghost" id="resourcesBulkDelete" style="color:var(--danger)"><i class="ph ph-trash"></i> حذف المحدد</button>
+        <button class="btn btn-ghost" id="resourcesBulkClear"><i class="ph ph-x"></i> إلغاء</button>
+    `;
+    wrap.appendChild(bulkBar);
+
+    filtered.forEach(r => {
+        const row = document.createElement('div');
+        row.className = 'team-row' + (state.selectedResources.has(r.id) ? ' selected' : '') + (r.highlight ? ' highlighted' : '');
+        row.dataset.id = r.id;
+        const icon = r.icon || (r.type === 'report' ? 'ph-file-pdf' : r.type === 'presentation' ? 'ph-presentation-chart' : 'ph-link');
+        const typeLabels = { report: 'تقرير', presentation: 'عرض', file: 'ملف', link: 'رابط' };
+        row.innerHTML = `
+            <div class="checkbox-wrap"><input type="checkbox" ${state.selectedResources.has(r.id) ? 'checked' : ''} data-select-resource="${r.id}"></div>
+            <div class="drag-handle"><i class="ph ph-dots-six-vertical"></i></div>
+            <div class="team-avatar resource-icon" style="background:rgba(255,62,108,0.12);color:var(--primary)">
+                <i class="ph-fill ${icon}"></i>
+            </div>
+            <div class="team-info">
+                <div class="name">${_escapeHTML(r.title || '—')}${r.highlight ? ' <span style="color:var(--primary);font-size:0.8rem">⭐ مميز</span>' : ''}</div>
+                <div class="role">${_escapeHTML(r.description || typeLabels[r.type] || '—')}</div>
+            </div>
+            <div class="team-actions">
+                <a class="icon-btn" href="${_safeURL(r.url, '#')}" target="_blank" rel="noopener noreferrer" title="فتح">
+                    <i class="ph ph-arrow-square-out"></i>
+                </a>
+                <button class="icon-btn" data-resource-action="edit" title="تعديل"><i class="ph ph-pencil-simple"></i></button>
+                <button class="icon-btn delete" data-resource-action="delete" title="حذف"><i class="ph ph-trash"></i></button>
+            </div>
+        `;
+        wrap.appendChild(row);
+    });
+
+    // Wire row buttons
+    wrap.querySelectorAll('.team-row').forEach(row => {
+        const id = row.dataset.id;
+        row.querySelector('[data-resource-action="edit"]')?.addEventListener('click', () => openResourceEditor(id));
+        row.querySelector('[data-resource-action="delete"]')?.addEventListener('click', () => deleteResource(id));
+        row.querySelector('input[type="checkbox"]')?.addEventListener('change', (e) => {
+            if (e.target.checked) state.selectedResources.add(id);
+            else state.selectedResources.delete(id);
+            renderResourcesList();
+        });
+    });
+
+    document.getElementById('resourcesBulkDelete')?.addEventListener('click', bulkDeleteResources);
+    document.getElementById('resourcesBulkClear')?.addEventListener('click', () => {
+        state.selectedResources.clear();
+        renderResourcesList();
+    });
+
+    // Drag-to-reorder
+    if (window.Sortable) {
+        try {
+            window.Sortable.create(wrap, {
+                handle: '.drag-handle',
+                animation: 200,
+                filter: '.bulk-bar, .checkbox-wrap, .team-actions',
+                onEnd: persistResourceOrder
+            });
+        } catch (_) {}
+    }
+}
+
+async function persistResourceOrder() {
+    const wrap = document.getElementById('adminResourcesList');
+    if (!wrap) return;
+    const ids = Array.from(wrap.querySelectorAll('.team-row')).map(r => r.dataset.id).filter(Boolean);
+    try {
+        const batch = writeBatch(db);
+        ids.forEach((id, i) => batch.update(doc(db, 'resources', id), { order: i }));
+        await batch.commit();
+        toast('تم تحديث الترتيب', 'success');
+        logActivity('edit', 'Reordered resources');
+    } catch (err) {
+        toast('فشل الترتيب: ' + err.message, 'error');
+    }
+}
+
+async function bulkDeleteResources() {
+    if (!state.selectedResources.size) return;
+    const count = state.selectedResources.size;
+    if (!confirm(`حذف ${count} رابط؟`)) return;
+    const snapshots = state.resources.filter(r => state.selectedResources.has(r.id)).map(r => ({ ...r }));
+    try {
+        const batch = writeBatch(db);
+        state.selectedResources.forEach(id => batch.delete(doc(db, 'resources', id)));
+        await batch.commit();
+        toast(`تم حذف ${count} رابط`, 'success', 6000, {
+            label: 'تراجع',
+            onClick: async () => {
+                try {
+                    const batch2 = writeBatch(db);
+                    snapshots.forEach(r => {
+                        const { id: _drop, ...data } = r;
+                        batch2.set(doc(db, 'resources', r.id), data);
+                    });
+                    await withRetry(() => batch2.commit());
+                    toast(`تم استعادة ${snapshots.length} رابط`, 'success');
+                    logActivity('add', `Restored ${snapshots.length} resources`);
+                } catch (err) {
+                    toast('فشل الاستعادة: ' + (err?.message || err), 'error', 6000);
+                }
+            }
+        });
+        logActivity('delete', `Bulk deleted ${count} resources`);
+        state.selectedResources.clear();
+    } catch (err) {
+        toast('فشل الحذف الجماعي: ' + (err?.message || err), 'error');
+    }
+}
+
+document.getElementById('addResourceBtn')?.addEventListener('click', () => openResourceEditor());
+
+// Resources search (debounced)
+const resourcesSearch = document.getElementById('adminResourcesSearch');
+if (resourcesSearch) {
+    resourcesSearch.addEventListener('input', _debounce((e) => {
+        state.resourcesSearch = e.target.value;
+        renderResourcesList();
+    }, 150));
+}
+
+function openResourceEditor(id = null) {
+    const modal = document.getElementById('resourceEditor');
+    const form = document.getElementById('resourceForm');
+    if (!modal || !form) {
+        toast('نموذج الرابط غير جاهز — حدّث الصفحة', 'error', 5000);
+        return;
+    }
+    form.reset();
+    document.getElementById('resource-id').value = '';
+    document.getElementById('resource-order').value = state.resources.length;
+    document.getElementById('resource-highlight').checked = false;
+
+    if (id) {
+        const r = state.resources.find(x => x.id === id);
+        if (!r) return;
+        document.getElementById('resourceEditorTitle').textContent = 'تعديل الرابط';
+        document.getElementById('resource-id').value = r.id;
+        document.getElementById('resource-title').value = r.title || '';
+        document.getElementById('resource-desc').value = r.description || '';
+        document.getElementById('resource-url').value = r.url || '';
+        document.getElementById('resource-type').value = r.type || 'file';
+        document.getElementById('resource-icon').value = r.icon || 'ph-link';
+        document.getElementById('resource-order').value = r.order !== undefined ? r.order : 0;
+        document.getElementById('resource-highlight').checked = !!r.highlight;
+    } else {
+        document.getElementById('resourceEditorTitle').textContent = 'إضافة رابط جديد';
+    }
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    console.log('[openResourceEditor] opened, id=', id || '(new)');
+}
+
+function closeResourceEditor() {
+    const modal = document.getElementById('resourceEditor');
+    if (!modal) return;
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+}
+
+// Close handlers
+document.querySelectorAll('[data-close-resource-editor]').forEach(b => {
+    b.addEventListener('click', closeResourceEditor);
+});
+const _resourceEditorEl = document.getElementById('resourceEditor');
+if (_resourceEditorEl) {
+    _resourceEditorEl.addEventListener('click', (e) => { if (e.target === _resourceEditorEl) closeResourceEditor(); });
+}
+
+// Submit
+document.getElementById('resourceForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const title = document.getElementById('resource-title').value.trim();
+    const url = document.getElementById('resource-url').value.trim();
+    if (title.length < 2) { toast('العنوان قصير جداً', 'error'); return; }
+    if (!_safeURLOrNull(url)) { toast('الرابط يجب أن يبدأ بـ http(s)', 'error'); return; }
+
+    const payload = {
+        title,
+        description: document.getElementById('resource-desc').value.trim().slice(0, 500),
+        url,
+        type: document.getElementById('resource-type').value,
+        icon: document.getElementById('resource-icon').value,
+        order: parseInt(document.getElementById('resource-order').value, 10) || 0,
+        highlight: document.getElementById('resource-highlight').checked,
+        updatedAt: new Date().toISOString()
+    };
+
+    const originalLabel = btn ? btn.innerHTML : '';
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ph ph-spinner-gap ph-spin"></i><span>جاري الحفظ...</span>';
+        }
+        const id = document.getElementById('resource-id').value;
+        if (id) {
+            await withRetry(() => updateDoc(doc(db, 'resources', id), payload));
+            toast('تم التعديل', 'success');
+            logActivity('edit', `Updated resource: ${title}`);
+        } else {
+            payload.createdAt = new Date().toISOString();
+            await withRetry(() => addDoc(collection(db, 'resources'), payload));
+            toast('تمت الإضافة', 'success');
+            logActivity('add', `Added resource: ${title}`);
+        }
+        closeResourceEditor();
+    } catch (err) {
+        console.error('[resourceForm submit] error:', err);
+        let msg = err?.message || 'فشل الحفظ';
+        if (err?.code === 'permission-denied') msg = 'صلاحيات مرفوضة';
+        toast('خطأ: ' + msg, 'error', 6000);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalLabel || '<i class="ph ph-check"></i> حفظ الرابط';
+        }
+    }
+});
+
+async function deleteResource(id) {
+    const r = state.resources.find(x => x.id === id);
+    if (!r) return;
+    if (!confirm('حذف الرابط "' + (r.title || '') + '"؟')) return;
+    const snapshot = { ...r };
+    try {
+        await withRetry(() => deleteDoc(doc(db, 'resources', id)));
+        toast('تم حذف "' + (r.title || 'الرابط') + '"', 'success', 6000, {
+            label: 'تراجع',
+            onClick: async () => {
+                try {
+                    const { id: _drop, ...data } = snapshot;
+                    await withRetry(() => setDoc(doc(db, 'resources', snapshot.id), data));
+                    toast('تم استعادة "' + (snapshot.title || 'الرابط') + '"', 'success');
+                    logActivity('add', `Restored resource: ${snapshot.title}`);
+                } catch (err) {
+                    toast('فشل الاستعادة: ' + (err?.message || err), 'error', 6000);
+                }
+            }
+        });
+        logActivity('delete', `Deleted resource: ${r.title}`);
+    } catch (err) {
+        toast('فشل الحذف: ' + (err?.message || err), 'error');
+    }
+}
+
+// Also export resources in the backup
+const _origExport = document.getElementById('qaExport');
+if (_origExport) {
+    _origExport.addEventListener('click', () => {
+        const data = {
+            settings: state.settings,
+            team: state.team,
+            posts: state.posts,
+            resources: state.resources,
+            exportedAt: new Date().toISOString(),
+            version: '2.1'
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'nti-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('تم التصدير', 'success');
+        logActivity('settings', 'Exported data backup (v2.1 — includes resources)');
+    });
+}
+
 async function deletePost(id) {
     const p = state.posts.find(x => x.id === id);
     if (!p) return;
@@ -1306,6 +1642,14 @@ function initBackupRestore() {
                         else batch.set(doc(collection(db, 'posts')), rest);
                     });
                 }
+                // Import resources (added in v2.1)
+                if (data.resources && Array.isArray(data.resources)) {
+                    data.resources.forEach(r => {
+                        const { id, ...rest } = r;
+                        if (id) batch.set(doc(db, 'resources', id), rest);
+                        else batch.set(doc(collection(db, 'resources')), rest);
+                    });
+                }
                 // Import settings
                 if (data.settings) {
                     batch.set(doc(db, 'settings', 'site'), data.settings);
@@ -1329,11 +1673,11 @@ function initBackupRestore() {
 // Shortcuts:
 //   Ctrl/Cmd + N        → New post
 //   Ctrl/Cmd + M        → New member
-//   Ctrl/Cmd + S        → Save current form (settings / member / post)
+//   Ctrl/Cmd + S        → Save current form (settings / member / post / resource)
 //   Esc                 → Close topmost modal
 //   /                   → Focus the search input in the active tab
 //   ?                   → Show shortcuts help modal
-//   1 / 2 / 3 / 4 / 5   → Switch to overview / team / posts / activity / settings
+//   1 / 2 / 3 / 4 / 5 / 6 → overview / team / posts / resources / activity / settings
 //
 // All shortcuts are disabled when the user is typing in an input/textarea
 // (except Esc and Ctrl+S, which are explicitly user-driven).
@@ -1422,12 +1766,16 @@ function showShortcutsModal() {
                         <div class="shortcut-keys"><span class="kbd">3</span></div>
                     </div>
                     <div class="shortcut-row">
-                        <div class="shortcut-desc"><i class="ph ph-clock-counter-clockwise"></i> سجل النشاط</div>
+                        <div class="shortcut-desc"><i class="ph ph-link"></i> الملفات والروابط</div>
                         <div class="shortcut-keys"><span class="kbd">4</span></div>
                     </div>
                     <div class="shortcut-row">
-                        <div class="shortcut-desc"><i class="ph ph-faders"></i> الإعدادات</div>
+                        <div class="shortcut-desc"><i class="ph ph-clock-counter-clockwise"></i> سجل النشاط</div>
                         <div class="shortcut-keys"><span class="kbd">5</span></div>
+                    </div>
+                    <div class="shortcut-row">
+                        <div class="shortcut-desc"><i class="ph ph-faders"></i> الإعدادات</div>
+                        <div class="shortcut-keys"><span class="kbd">6</span></div>
                     </div>
                 </div>
                 <p style="text-align:center;color:var(--text-dim);font-size:0.85rem;margin-top:1.5rem">
@@ -1509,9 +1857,9 @@ document.addEventListener('keydown', (e) => {
             else showShortcutsModal();
             return;
         }
-        // Tab switcher: 1-5
-        if (['1', '2', '3', '4', '5'].includes(e.key)) {
-            const tabs = ['overview', 'team', 'posts', 'activity', 'settings'];
+        // Tab switcher: 1-6 (now includes resources between posts and activity)
+        if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
+            const tabs = ['overview', 'team', 'posts', 'resources', 'activity', 'settings'];
             _switchTab(tabs[parseInt(e.key, 10) - 1]);
             return;
         }
@@ -1524,7 +1872,7 @@ document.getElementById('shortcutsBtn')?.addEventListener('click', showShortcuts
 // ============================================================
 //   FORCE UPDATE — nuke the service worker + cache and reload.
 //
-// Why: even with ?v=4 in the SW URL, some browsers (especially when the
+// Why: even with ?v=5 in the SW URL, some browsers (especially when the
 // page is opened in DevTools "Disable cache" OFF, or behind a corporate
 // proxy) serve the OLD sw.js from the HTTP cache. The OLD sw.js then
 // installs CACHE_NAME v2 and serves the OLD admin.js. This button is the

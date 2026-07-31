@@ -188,33 +188,12 @@
                 <div class="feed-header" data-reveal>
                     <h2 id="reports-heading" class="feed-title">الملفات والتقارير</h2>
                 </div>
-                <div class="reports-list" data-reveal>
-                    <div class="report-card">
-                        <div class="card-icon"><i class="ph-fill ph-presentation-chart"></i></div>
-                        <div class="card-content">
-                            <h3>Master Presentation</h3>
-                            <p>البريزنتيشن المجمع لكل أعضاء الفريق</p>
-                        </div>
-                        <div class="card-actions">
-                            <a href="#" id="master-pres-link" class="btn btn-action" target="_blank" style="display: none;">عرض</a>
-                            <button class="btn btn-icon-only copy-link" data-target="master-pres-link" aria-label="نسخ الرابط">
-                                <i class="ph ph-copy"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="report-card highlight">
-                        <div class="card-icon"><i class="ph-fill ph-file-pdf"></i></div>
-                        <div class="card-content">
-                            <h3>Final Report</h3>
-                            <p>التقرير النهائي الشامل (47 صفحة)</p>
-                        </div>
-                        <div class="card-actions">
-                            <a href="#" id="report-preview-link" class="btn btn-action" target="_blank" style="display: none;">قراءة</a>
-                            <a href="#" id="report-download-link" class="btn btn-action primary" target="_blank" style="display: none;">تحميل</a>
-                            <button class="btn btn-icon-only copy-link" data-target="report-download-link" aria-label="نسخ الرابط">
-                                <i class="ph ph-copy"></i>
-                            </button>
-                        </div>
+                <div class="reports-list" id="resources-list" data-reveal>
+                    <!-- Rendered dynamically by main.js from the `resources` collection -->
+                    <!-- Fallback skeleton shown while loading -->
+                    <div class="empty-state">
+                        <i class="ph ph-spinner-gap ph-spin"></i>
+                        <span>جاري التحميل...</span>
                     </div>
                 </div>
             </section>
@@ -288,17 +267,17 @@
         <i class="ph-bold ph-arrow-up" aria-hidden="true"></i>
     </button>
 
-    <script type="module" src="./main.js?v=4"></script>
+    <script type="module" src="./main.js?v=5"></script>
     <script>
         // Register Service Worker.
-        // NOTE: The ?v=4 query string is critical — without it, the browser
+        // NOTE: The ?v=5 query string is critical — without it, the browser
         // serves the OLD sw.js from its HTTP cache, the OLD sw.js installs
         // CACHE_NAME = 'g16-nti-v2', and the user is stuck on the broken
         // admin.js forever. The query string makes the browser see a
         // different URL and re-fetch from the network.
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js?v=4')
+                navigator.serviceWorker.register('./sw.js?v=5')
                     .then(reg => {
                         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
                         reg.addEventListener('updatefound', () => {
