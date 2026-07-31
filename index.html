@@ -1,18 +1,24 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="group 16 tanta NTI - The ultimate cybersecurity graduation project platform for Group 16, Tanta University NTI. Advanced penetrntion testing and security research.">
-    <meta name="keywords" content="group 16 tanta NTI, cybersecurity, graduation project, tanta university, NTI, cyber security group 16, penetrntion testing">
+    <meta name="description" content="group 16 tanta NTI - The ultimate cybersecurity graduation project platform for Group 16, Tanta University NTI. Advanced penetration testing and security research.">
+    <meta name="keywords" content="group 16 tanta NTI, cybersecurity, graduation project, tanta university, NTI, cyber security group 16, penetration testing">
     <meta name="author" content="Group 16 Tanta NTI">
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
     <link rel="canonical" href="https://waleeed-amr.github.io/G16/">
-    <meta name="theme-color" content="#1877f2">
+    <meta name="theme-color" content="#1877f2" id="theme-color-meta">
+
+    <!-- PWA -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="G16 NTI">
 
     <title id="seo-title">group 16 tanta NTI - Cybersecurity Project</title>
 
-    <!-- Open Graph Tags (Facebook, LinkedIn, Discord) -->
+    <!-- Open Graph Tags -->
     <meta property="og:title" content="group 16 tanta NTI - Cybersecurity Project">
     <meta property="og:description" content="Welcome to group 16 tanta NTI. The official portal for our advanced cybersecurity graduation project.">
     <meta property="og:type" content="website">
@@ -24,7 +30,7 @@
     <meta name="twitter:title" content="group 16 tanta NTI - Cybersecurity Project">
     <meta name="twitter:description" content="Welcome to group 16 tanta NTI. The official portal for our advanced cybersecurity graduation project.">
 
-    <!-- JSON-LD Structured Data for Google Rich Snippets -->
+    <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -36,10 +42,10 @@
     }
     </script>
 
-    <!-- Preload Critical Assets for Performance Optimization -->
+    <!-- Preload Critical Assets -->
     <link rel="preload" href="./main.css" as="style">
     <link rel="preload" href="./main.js" as="script" crossorigin="anonymous">
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -50,7 +56,10 @@
     <link rel="stylesheet" href="./main.css">
 </head>
 <body>
-    <!-- App Navbar (Like Instagram / Facebook Top Bar) -->
+    <!-- Particle Background Canvas -->
+    <canvas id="particle-canvas" aria-hidden="true"></canvas>
+
+    <!-- App Navbar -->
     <nav class="app-navbar" id="mainNav" aria-label="Primary">
         <div class="nav-brand">
             <i class="ph-fill ph-users-three" aria-hidden="true"></i>
@@ -61,29 +70,34 @@
             <li><a href="#feed"><i class="ph ph-squares-four"></i> <span>المنشورات</span></a></li>
             <li><a href="#reports"><i class="ph ph-folder-open"></i> <span>الملفات</span></a></li>
         </ul>
-        <button class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="navLinks">
-            <i class="ph ph-list" aria-hidden="true"></i>
-        </button>
+        <div class="nav-actions">
+            <button class="theme-toggle" id="themeToggle" aria-label="تبديل الوضع الداكن">
+                <i class="ph ph-moon" aria-hidden="true"></i>
+            </button>
+            <button class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="navLinks">
+                <i class="ph ph-list" aria-hidden="true"></i>
+            </button>
+        </div>
     </nav>
 
     <span id="main-content-anchor" tabindex="-1"></span>
 
-    <!-- MAIN CONTENT CONTAINER -->
+    <!-- MAIN CONTENT -->
     <div id="main-content" class="app-layout">
-        
-        <!-- Profile Header (Like Facebook Cover / Instagram Profile) -->
-        <header id="home" class="profile-header">
+
+        <!-- Profile Header -->
+        <header id="home" class="profile-header" data-reveal>
             <div class="cover-photo">
-                <!-- A clean gradient or pattern cover -->
+                <div class="cover-overlay"></div>
             </div>
             <div class="profile-info-container">
-                <div class="profile-avatar">
+                <div class="profile-avatar" data-reveal-delay="0.1s">
                     <i class="ph-fill ph-shield-check"></i>
                 </div>
                 <div class="profile-details">
-                    <h1 id="hero-title" class="profile-name">مشروع تخرج NTI</h1>
-                    <p id="hero-desc" class="profile-bio">منصة السايبر سيكيورتي المتقدمة - جروب 16</p>
-                    <div class="profile-stats">
+                    <h1 id="hero-title" class="profile-name" data-reveal-delay="0.2s">مشروع تخرج NTI</h1>
+                    <p id="hero-desc" class="profile-bio" data-reveal-delay="0.3s">منصة السايبر سيكيورتي المتقدمة - جروب 16</p>
+                    <div class="profile-stats" data-reveal-delay="0.4s">
                         <div class="stat-box">
                             <span class="stat-num" id="stat-members" data-counter="0">0</span>
                             <span class="stat-label">أعضاء</span>
@@ -92,8 +106,12 @@
                             <span class="stat-num" id="stat-posts" data-counter="0">0</span>
                             <span class="stat-label">مراحل</span>
                         </div>
+                        <div class="stat-box">
+                            <span class="stat-num" id="stat-views" data-counter="0">0</span>
+                            <span class="stat-label">مشاهدة</span>
+                        </div>
                     </div>
-                    <div class="profile-actions">
+                    <div class="profile-actions" data-reveal-delay="0.5s">
                         <a href="#feed" class="btn btn-follow">متابعة الفريق</a>
                         <a href="#reports" class="btn btn-message">استعراض المشروع</a>
                     </div>
@@ -102,38 +120,78 @@
         </header>
 
         <main class="feed-container">
-            <!-- Feed / Team Section -->
+            <!-- Feed Section -->
             <section id="feed" class="feed-section" aria-labelledby="feed-heading">
-                <div class="feed-header">
+                <div class="feed-header" data-reveal>
                     <h2 id="feed-heading" class="feed-title">المنشورات (الفريق)</h2>
                     <div class="feed-search">
                         <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-                        <input type="text" id="teamSearch" placeholder="البحث عن عضو..." autocomplete="off">
+                        <input type="text" id="teamSearch" placeholder="البحث عن عضو أو مشروع..." autocomplete="off">
                     </div>
                 </div>
 
                 <div id="team-grid" class="feed-list" aria-live="polite" aria-busy="true">
-                    <!-- Posts will be generated here by main.js -->
-                    <div class="loading-post" role="status">
-                        <i class="ph ph-spinner-gap ph-spin" aria-hidden="true"></i>
-                        <span>جاري تحميل المنشورات...</span>
+                    <!-- Skeleton Loaders -->
+                    <div class="skeleton-card" role="status" aria-label="جاري التحميل">
+                        <div class="skeleton-header">
+                            <div class="skeleton-avatar"></div>
+                            <div class="skeleton-lines">
+                                <div class="skeleton-line" style="width: 60%"></div>
+                                <div class="skeleton-line" style="width: 40%"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-body">
+                            <div class="skeleton-line" style="width: 100%"></div>
+                            <div class="skeleton-line" style="width: 85%"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-card" role="status" aria-label="جاري التحميل">
+                        <div class="skeleton-header">
+                            <div class="skeleton-avatar"></div>
+                            <div class="skeleton-lines">
+                                <div class="skeleton-line" style="width: 55%"></div>
+                                <div class="skeleton-line" style="width: 35%"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-body">
+                            <div class="skeleton-line" style="width: 95%"></div>
+                            <div class="skeleton-line" style="width: 70%"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-card" role="status" aria-label="جاري التحميل">
+                        <div class="skeleton-header">
+                            <div class="skeleton-avatar"></div>
+                            <div class="skeleton-lines">
+                                <div class="skeleton-line" style="width: 65%"></div>
+                                <div class="skeleton-line" style="width: 45%"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-body">
+                            <div class="skeleton-line" style="width: 90%"></div>
+                            <div class="skeleton-line" style="width: 60%"></div>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            <!-- Reports Section (Like Saved Posts or Highlights) -->
+            <!-- Reports Section -->
             <section id="reports" class="reports-section" aria-labelledby="reports-heading">
-                <div class="feed-header">
+                <div class="feed-header" data-reveal>
                     <h2 id="reports-heading" class="feed-title">الملفات والتقارير</h2>
                 </div>
-                <div class="reports-list">
+                <div class="reports-list" data-reveal>
                     <div class="report-card">
                         <div class="card-icon"><i class="ph-fill ph-presentation-chart"></i></div>
                         <div class="card-content">
                             <h3>Master Presentation</h3>
                             <p>البريزنتيشن المجمع لكل أعضاء الفريق</p>
                         </div>
-                        <a href="#" id="master-pres-link" class="btn btn-action" target="_blank" style="display: none;">عرض</a>
+                        <div class="card-actions">
+                            <a href="#" id="master-pres-link" class="btn btn-action" target="_blank" style="display: none;">عرض</a>
+                            <button class="btn btn-icon-only copy-link" data-target="master-pres-link" aria-label="نسخ الرابط">
+                                <i class="ph ph-copy"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="report-card highlight">
                         <div class="card-icon"><i class="ph-fill ph-file-pdf"></i></div>
@@ -144,6 +202,9 @@
                         <div class="card-actions">
                             <a href="#" id="report-preview-link" class="btn btn-action" target="_blank" style="display: none;">قراءة</a>
                             <a href="#" id="report-download-link" class="btn btn-action primary" target="_blank" style="display: none;">تحميل</a>
+                            <button class="btn btn-icon-only copy-link" data-target="report-download-link" aria-label="نسخ الرابط">
+                                <i class="ph ph-copy"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -153,10 +214,13 @@
         <!-- App Footer -->
         <footer class="app-footer">
             <p>جميع الحقوق محفوظة &copy; جروب 16 | هندسة طنطا NTI</p>
+            <div class="footer-links">
+                <a href="./392010.html" target="_blank">لوحة التحكم</a>
+            </div>
         </footer>
     </div>
 
-    <!-- Member Modal (Like Photo Viewer / Post Detail) -->
+    <!-- Member Modal -->
     <div class="modal-backdrop" id="memberModal" role="dialog" aria-modal="true" aria-hidden="true">
         <div class="modal-card">
             <div class="modal-header">
@@ -183,10 +247,32 @@
                     <h4 class="section-label">المساهمات:</h4>
                     <p id="modalContributions">—</p>
                 </div>
+                <div class="post-views">
+                    <i class="ph ph-eye"></i>
+                    <span id="modalViews">0</span> مشاهدة
+                </div>
             </div>
             <div class="modal-actions" id="modalActions"></div>
         </div>
     </div>
+
+    <!-- Custom Confirm Modal -->
+    <div class="modal-backdrop" id="confirmModal" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="modal-card confirm-card">
+            <div class="confirm-icon">
+                <i class="ph ph-question"></i>
+            </div>
+            <h3 id="confirmTitle">تأكيد</h3>
+            <p id="confirmMessage">هل أنت متأكد؟</p>
+            <div class="confirm-actions">
+                <button class="btn btn-secondary" id="confirmCancel">إلغاء</button>
+                <button class="btn btn-primary" id="confirmOk">تأكيد</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
     <!-- Back to top -->
     <button id="backToTop" class="back-to-top" type="button" aria-label="العودة لأعلى الصفحة">
@@ -194,5 +280,15 @@
     </button>
 
     <script type="module" src="./main.js"></script>
+    <script>
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW registered:', reg.scope))
+                    .catch(err => console.log('SW registration failed:', err));
+            });
+        }
+    </script>
 </body>
 </html>

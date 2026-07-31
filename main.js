@@ -1,4 +1,4 @@
-﻿// ==========================================================
+// ==========================================================
 //   NTI SECURE — Frontend Logic (Social Media Feed UI)
 //   Data · Feed · Modal · Search · Scroll FX
 //   All user content is rendered via textContent.
@@ -12,7 +12,7 @@ const withRetry = async (fn, retries = 3, delay = 1500) => {
         try { return await fn(); } 
         catch (err) {
             if (i === retries - 1) throw err;
-            console.warn([Network] Retry \/\ after \ms..., err.message);
+            console.warn('[Network] Retry', i + 1, '/', retries, 'after', delay, 'ms', err.message);
             await new Promise(r => setTimeout(r, delay));
             delay *= 1.5; // Exponential backoff
         }
@@ -33,7 +33,7 @@ import {
 
 const {
     safeURL, safeURLOrNull, escapeHTML, sanitizeRich,
-    fallbackAvatar, debounce, focusTrap,
+    fallbackAvatar, focusTrap,
 } = window.NTI || {};
 
 // Defensive fallbacks if security.js failed to load
@@ -256,11 +256,11 @@ async function loadSiteData() {
             if (heroDesc) heroDesc.textContent = 'يرجى ضبط إعدادات الموقع من لوحة التحكم.';
         }
 
-        const teamSnap = await withRetry(() => getDocs(query(collection(db, "team")), orderBy("order", "asc")));
+        const teamSnap = await withRetry(() => getDocs(query(collection(db, "team"), orderBy("order", "asc"))));
         state.team = [];
         teamSnap.forEach(d => state.team.push({ id: d.id, type: 'team', ...d.data() }));
 
-        const postsSnap = await withRetry(() => getDocs(query(collection(db, "posts")), orderBy("order", "asc")));
+        const postsSnap = await withRetry(() => getDocs(query(collection(db, "posts"), orderBy("order", "asc"))));
         state.posts = [];
         postsSnap.forEach(d => state.posts.push({ id: d.id, type: 'post', ...d.data() }));
 

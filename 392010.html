@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title>SYS_ROOT // DASHBOARD</title>
+    <title>SYS_ROOT // DASHBOARD v2.0</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,6 +12,7 @@
 
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
     <link rel="stylesheet" href="./admin.css">
 </head>
@@ -75,6 +76,10 @@
                     <i class="ph ph-article" aria-hidden="true"></i>
                     <span>المشاريع والمنشورات</span>
                 </a>
+                <a href="#" class="nav-item" data-tab="activity">
+                    <i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>
+                    <span>سجل النشاط</span>
+                </a>
                 <a href="#" class="nav-item" data-tab="settings">
                     <i class="ph ph-faders" aria-hidden="true"></i>
                     <span>إعدادات الموقع</span>
@@ -99,8 +104,8 @@
                         <i class="ph ph-list" aria-hidden="true"></i>
                     </button>
                     <div>
-                        <div class="topbar-title" id="topbarTitle">Overview</div>
-                        <div class="topbar-sub" id="topbarSub">System status &amp; quick metrics</div>
+                        <div class="topbar-title" id="topbarTitle">نظرة عامة</div>
+                        <div class="topbar-sub" id="topbarSub">إحصائيات الموقع</div>
                     </div>
                 </div>
                 <div class="topbar-right">
@@ -184,10 +189,10 @@
                                         <i class="ph ph-sliders" aria-hidden="true"></i>
                                         <span>الإعدادات</span>
                                     </button>
-                                    <a href="index.html" target="_blank" rel="noopener noreferrer" class="qa-btn">
-                                        <i class="ph ph-arrow-square-out" aria-hidden="true"></i>
-                                        <span>عرض الموقع</span>
-                                    </a>
+                                    <button type="button" class="qa-btn" id="qaExport">
+                                        <i class="ph ph-download-simple" aria-hidden="true"></i>
+                                        <span>تصدير البيانات</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -251,6 +256,29 @@
                     </div>
                 </section>
 
+                <!-- TAB: ACTIVITY LOG -->
+                <section class="tab-content" data-tab="activity">
+                    <div class="page-header">
+                        <div>
+                            <h1>سجل النشاط</h1>
+                            <p>آخر العمليات في النظام</p>
+                        </div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i> الأحداث الأخيرة</h3>
+                        </div>
+                        <div class="panel-body">
+                            <div class="activity-list" id="activityList" aria-live="polite">
+                                <div class="empty-state">
+                                    <i class="ph ph-spinner-gap ph-spin"></i>
+                                    <span>جاري التحميل...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- TAB: SETTINGS -->
                 <section class="tab-content" data-tab="settings">
                     <div class="page-header">
@@ -286,7 +314,7 @@
                                     <label for="site-download-url">رابط تحميل التقرير</label>
                                     <input type="url" id="site-download-url" placeholder="https://..." maxlength="1000">
                                 </div>
-                                <div style="display:flex; gap:1rem; margin-top:1.5rem;">
+                                <div style="display:flex; gap:1rem; margin-top:1.5rem; flex-wrap:wrap;">
                                     <button type="submit" class="btn btn-primary">
                                         <i class="ph ph-floppy-disk" aria-hidden="true"></i>
                                         <span>حفظ الإعدادات</span>
@@ -295,6 +323,15 @@
                                         <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
                                         <span>إعادة تعيين</span>
                                     </button>
+                                    <button type="button" class="btn btn-secondary" id="qaExport">
+                                        <i class="ph ph-download-simple" aria-hidden="true"></i>
+                                        <span>تصدير JSON</span>
+                                    </button>
+                                    <label class="btn btn-secondary" style="cursor:pointer;">
+                                        <i class="ph ph-upload-simple" aria-hidden="true"></i>
+                                        <span>استيراد JSON</span>
+                                        <input type="file" id="importFile" accept=".json" style="display:none;">
+                                    </label>
                                 </div>
                             </form>
                         </div>
@@ -360,7 +397,7 @@
                     <label for="member-contributions">المساهمات</label>
                     <textarea id="member-contributions" rows="2" placeholder="ماذا عمل هذا العضو؟" maxlength="2000"></textarea>
                 </div>
-                
+
                 <div class="modal-footer">
                     <span id="editor-status" class="status-msg" role="status" aria-live="polite"></span>
                     <button type="button" class="btn btn-ghost" data-close-editor>إلغاء</button>
@@ -383,17 +420,17 @@
             </div>
             <form id="postForm" class="modal-body" novalidate>
                 <input type="hidden" id="post-id">
-                
+
                 <div class="form-group">
                     <label for="post-title">العنوان *</label>
                     <input type="text" id="post-title" required minlength="2" maxlength="200" placeholder="مثال: التصميم النهائي للمشروع">
                 </div>
-                
+
                 <div class="form-group">
                     <label for="post-desc">الوصف</label>
                     <textarea id="post-desc" rows="4" maxlength="2000" placeholder="تفاصيل المشروع..."></textarea>
                 </div>
-                
+
                 <div class="form-group">
                     <label>صورة المشروع</label>
                     <div style="display:flex; flex-direction:column; gap:0.5rem;">
@@ -404,7 +441,7 @@
                         <input type="url" id="post-photo-url" placeholder="أو ضع رابط الصورة هنا" maxlength="1000">
                     </div>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="post-author-type">صاحب العمل</label>
                     <select id="post-author-type">
@@ -414,11 +451,9 @@
                 </div>
                 <div class="form-group" id="post-member-select-group" style="display:none;">
                     <label for="post-author-id">اختر العضو</label>
-                    <select id="post-author-id">
-                        <!-- Populated via JS -->
-                    </select>
+                    <select id="post-author-id"></select>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="post-link">رابط خارجي (للعرض/التحميل)</label>
                     <input type="url" id="post-link" maxlength="1000" placeholder="https://...">
@@ -428,7 +463,7 @@
                     <input type="number" id="post-order" min="0" max="999" value="0">
                     <span class="help-text">الأقل يظهر أولاً</span>
                 </div>
-                
+
                 <div class="modal-footer">
                     <span id="post-editor-status" class="status-msg" role="status" aria-live="polite"></span>
                     <button type="button" class="btn btn-ghost" id="cancelPostEditor">إلغاء</button>
@@ -443,7 +478,6 @@
     <!-- TOASTS -->
     <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
-    <!-- Load our App Scripts -->
     <script type="module" src="./admin.js"></script>
 </body>
 </html>
